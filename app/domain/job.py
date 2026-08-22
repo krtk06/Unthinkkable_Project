@@ -11,7 +11,6 @@ class Requirement(StrictModel):
     name: str
     type: RequirementType
     minimum: str | None = None
-    required: bool = False
 
 
 class JobRequirements(StrictModel):

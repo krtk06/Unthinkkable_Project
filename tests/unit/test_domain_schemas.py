@@ -105,13 +105,32 @@ def test_match_schema_rejects_score_outside_rubric() -> None:
             score=11,
             required_coverage=1,
             preferred_coverage=0,
+            strengths=[],
+            gaps=[],
             evidence=[Evidence(claim="Python", source="skills[0]", quote="Python")],
+            uncertainty=[],
             model=ModelMetadata(provider="test", model="test", prompt_version="test-v1"),
         )
 
 
 def test_job_schema_requires_explicit_requirement_type() -> None:
-    requirement = Requirement(name="Python", type="skill", required=True)
+    requirement = Requirement(name="Python", type="skill")
     job = JobRequirements(title="Engineer", required=[requirement])
 
-    assert job.required[0].required is True
+    assert job.required[0].type == "skill"
+
+
+def test_match_schema_requires_explanation_fields() -> None:
+    schema = MatchResult.model_json_schema()
+
+    assert schema["required"] == [
+        "candidate_id",
+        "score",
+        "required_coverage",
+        "preferred_coverage",
+        "strengths",
+        "gaps",
+        "evidence",
+        "uncertainty",
+        "model",
+    ]
