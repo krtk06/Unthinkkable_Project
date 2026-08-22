@@ -67,6 +67,9 @@ def upgrade() -> None:
         sa.Column("page_count", sa.Integer, nullable=True),
         sa.Column("ocr_used", sa.Boolean, nullable=True),
         sa.Column("extraction_warnings", sa.JSON, nullable=True),
+        sa.Column("extraction_provider", sa.String(80), nullable=True),
+        sa.Column("extraction_model", sa.String(160), nullable=True),
+        sa.Column("extraction_prompt_version", sa.String(80), nullable=True),
         sa.Column("parsed_json", sa.JSON, nullable=True),
         sa.Column("status", sa.String(32), nullable=False),
         sa.Column("error_code", sa.String(64), nullable=True),
@@ -89,6 +92,9 @@ def upgrade() -> None:
         sa.Column("error_code", sa.String(64), nullable=True),
         sa.Column("attempt_number", sa.Integer, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint(
+            "resume_file_id", "stage", "attempt_number", name="uq_processing_attempt_number"
+        ),
     )
     op.create_index(
         "ix_processing_attempts_resume_file_id", "processing_attempts", ["resume_file_id"]

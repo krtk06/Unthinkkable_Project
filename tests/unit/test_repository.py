@@ -109,6 +109,9 @@ def test_repository_persists_extraction_metadata_and_attempt(tmp_path: Path) -> 
         ocr_used=False,
         warnings=["warning"],
         parsed={"schema_version": "1.0"},
+        provider="test-provider",
+        model="test-model",
+        prompt_version="resume-extraction-v1",
     )
 
     db.refresh(resume)
@@ -116,6 +119,9 @@ def test_repository_persists_extraction_metadata_and_attempt(tmp_path: Path) -> 
     assert resume.page_count == 1
     assert resume.ocr_used is False
     assert resume.extraction_warnings == ["warning"]
+    assert resume.extraction_provider == "test-provider"
+    assert resume.extraction_model == "test-model"
+    assert resume.extraction_prompt_version == "resume-extraction-v1"
     assert len(resume.attempts) == 1
 
 

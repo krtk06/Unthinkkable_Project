@@ -86,6 +86,9 @@ class ResumeFile(Base):
     page_count: Mapped[int | None] = mapped_column(nullable=True)
     ocr_used: Mapped[bool | None] = mapped_column(nullable=True)
     extraction_warnings: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    extraction_provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    extraction_model: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    extraction_prompt_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
     parsed_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="uploaded")
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -101,6 +104,11 @@ class ResumeFile(Base):
 
 class ProcessingAttempt(Base):
     __tablename__ = "processing_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "resume_file_id", "stage", "attempt_number", name="uq_processing_attempt_number"
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
     resume_file_id: Mapped[str] = mapped_column(

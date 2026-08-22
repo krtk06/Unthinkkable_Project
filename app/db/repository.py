@@ -74,6 +74,9 @@ class ResumeRepository:
         ocr_used: bool,
         warnings: list[str],
         parsed: dict[str, Any],
+        provider: str,
+        model: str,
+        prompt_version: str,
     ) -> None:
         resume = self.get_resume(db, resume_id)
         if resume is None:
@@ -82,6 +85,9 @@ class ResumeRepository:
         resume.page_count = page_count
         resume.ocr_used = ocr_used
         resume.extraction_warnings = warnings
+        resume.extraction_provider = provider
+        resume.extraction_model = model
+        resume.extraction_prompt_version = prompt_version
         resume.parsed_json = parsed
         resume.status = "parsed"
         db.commit()
@@ -99,27 +105,37 @@ class ResumeRepository:
         resume = self.get_resume(db, resume_id)
         if resume is None:
             raise ValueError("RESUME_NOT_FOUND")
-        if attempt_number is None:
-            latest_attempt = db.scalar(
-                select(func.max(ProcessingAttempt.attempt_number)).where(
-                    ProcessingAttempt.resume_file_id == resume_id,
-                    ProcessingAttempt.stage == stage,
+        for _ in range(3):
+            if attempt_number is None:
+                latest_attempt = db.scalar(
+                    select(func.max(ProcessingAttempt.attempt_number)).where(
+                        ProcessingAttempt.resume_file_id == resume_id,
+                        ProcessingAttempt.stage == stage,
+                    )
                 )
+                next_attempt_number = (latest_attempt or 0) + 1
+            else:
+                next_attempt_number = attempt_number
+            if next_attempt_number < 1:
+                raise ValueError("INVALID_ATTEMPT_NUMBER")
+            attempt = ProcessingAttempt(
+                resume_file_id=resume_id,
+                stage=stage,
+                status=status,
+                attempt_number=next_attempt_number,
+                error_code=error_code,
             )
-            attempt_number = (latest_attempt or 0) + 1
-        if attempt_number < 1:
-            raise ValueError("INVALID_ATTEMPT_NUMBER")
-        attempt = ProcessingAttempt(
-            resume_file_id=resume_id,
-            stage=stage,
-            status=status,
-            attempt_number=attempt_number,
-            error_code=error_code,
-        )
-        db.add(attempt)
-        db.commit()
-        db.refresh(attempt)
-        return attempt
+            db.add(attempt)
+            try:
+                db.commit()
+            except IntegrityError as error:
+                db.rollback()
+                if attempt_number is not None:
+                    raise ValueError("ATTEMPT_NUMBER_CONFLICT") from error
+                continue
+            db.refresh(attempt)
+            return attempt
+        raise ValueError("ATTEMPT_NUMBER_CONFLICT")
 
     def save_match(self, db: Session, candidate_id: str, result: MatchResult) -> Match:
         match = Match(
