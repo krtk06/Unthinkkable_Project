@@ -1,9 +1,14 @@
+from typing import Protocol
+
 from app.domain.job import JobRequirements
-from app.llm.client import LLMClient
+
+
+class JobRequirementsClient(Protocol):
+    def extract_job(self, text: str) -> JobRequirements: ...
 
 
 def normalize_job_description(
-    source: str | JobRequirements, client: LLMClient | None
+    source: str | JobRequirements, client: JobRequirementsClient | None
 ) -> JobRequirements:
     if isinstance(source, JobRequirements):
         return source

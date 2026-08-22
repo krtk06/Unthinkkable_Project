@@ -1,0 +1,120 @@
+from collections.abc import Mapping
+from typing import Protocol
+
+from sqlalchemy.orm import Session
+
+from app.db.repository import ResumeRepository
+from app.domain.job import JobRequirements
+from app.domain.match import MatchResult
+from app.domain.resume import ExtractedResume
+from app.ingestion.text_extract import ExtractionResult
+from app.matching.scoring import ScoringClient
+from app.matching.scoring import score_candidate as score_match
+
+
+class FileStorage(Protocol):
+    def get_original(self, uri: str) -> bytes: ...
+
+
+class TextExtractor(Protocol):
+    def extract(self, file_bytes: bytes, content_type: str) -> ExtractionResult: ...
+
+
+class ResumeParser(Protocol):
+    def extract_resume(self, text: str) -> ExtractedResume: ...
+
+
+class ResumeWorker:
+    def __init__(
+        self,
+        db: Session,
+        repository: ResumeRepository,
+        storage: FileStorage,
+        extractor: TextExtractor,
+        parser: ResumeParser,
+        *,
+        provider: str,
+        model: str,
+        prompt_version: str,
+    ) -> None:
+        self.db = db
+        self.repository = repository
+        self.storage = storage
+        self.extractor = extractor
+        self.parser = parser
+        self.provider = provider
+        self.model = model
+        self.prompt_version = prompt_version
+
+    def process_resume(self, resume_id: str) -> str:
+        resume = self.repository.get_resume(self.db, resume_id)
+        if resume is None:
+            raise ValueError("RESUME_NOT_FOUND")
+        if resume.status == "parsed":
+            return "parsed"
+        self.repository.record_attempt(self.db, resume_id, "parse", "started")
+        try:
+            extraction = self.extractor.extract(
+                self.storage.get_original(resume.storage_uri), resume.content_type
+            )
+            self.repository.update_stage(self.db, resume_id, "text_extracted")
+            parsed = self.parser.extract_resume(extraction.text)
+            self.repository.save_extraction(
+                self.db,
+                resume_id,
+                text=extraction.text,
+                page_count=extraction.page_count,
+                ocr_used=extraction.ocr_used,
+                warnings=extraction.warnings,
+                parsed=parsed.model_dump(mode="json"),
+                provider=self.provider,
+                model=self.model,
+                prompt_version=self.prompt_version,
+            )
+            return "parsed"
+        except ValueError as error:
+            self.repository.update_stage(self.db, resume_id, "failed", str(error).split(":", 1)[0])
+            self.repository.record_attempt(
+                self.db,
+                resume_id,
+                "parse",
+                "failed",
+                error_code=str(error).split(":", 1)[0],
+            )
+            return "failed"
+
+    def score_candidate(
+        self,
+        candidate_id: str,
+        requirements: JobRequirements,
+        resume: ExtractedResume,
+        client: ScoringClient,
+        embedding_context: str = "",
+    ) -> MatchResult:
+        result = score_match(requirements, resume, embedding_context, client)
+        if result.candidate_id != candidate_id:
+            raise ValueError("CANDIDATE_ID_MISMATCH")
+        self.repository.save_match(self.db, candidate_id, result)
+        return result
+
+
+def process_resume(worker: ResumeWorker, resume_id: str) -> str:
+    return worker.process_resume(resume_id)
+
+
+def score_candidate(
+    worker: ResumeWorker,
+    candidate_id: str,
+    requirements: JobRequirements,
+    resume: ExtractedResume,
+    client: ScoringClient,
+    embedding_context: str = "",
+) -> MatchResult:
+    return worker.score_candidate(candidate_id, requirements, resume, client, embedding_context)
+
+
+def process_batch(worker: ResumeWorker, resume_ids: list[str]) -> Mapping[str, str]:
+    statuses: dict[str, str] = {}
+    for resume_id in resume_ids:
+        statuses[resume_id] = worker.process_resume(resume_id)
+    return statuses
