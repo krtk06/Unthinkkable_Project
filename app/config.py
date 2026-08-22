@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     llm_provider: str = "disabled"
     llm_model: str = ""
     llm_api_key: str | None = Field(default=None, repr=False)
-    max_file_bytes: int = 10 * 1024 * 1024
+    max_file_bytes: int = Field(default=10 * 1024 * 1024, gt=0, le=10 * 1024 * 1024)
     retention_days: int = Field(default=30, ge=0, le=365)
 
 
