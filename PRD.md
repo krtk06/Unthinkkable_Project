@@ -174,7 +174,7 @@ Optional dashboard: upload/session setup, processing progress, ranked candidate 
 
 ### g) Data Storage
 
-Persist session/JD metadata, raw resume in private object storage, parsed JSON, normalized requirements, scores, justifications, model/prompt versions, processing status, timestamps, and audit events. PostgreSQL stores metadata and JSONB; object storage stores originals. Default retention is 30 days, configurable to 0-365 days; deletion removes object and database records, subject to an auditable deletion event. Encrypt in transit and at rest, minimize PII in logs, restrict access by workspace, and support export/deletion requests.
+Persist session/JD metadata, raw resume in private object storage, parsed JSON, normalized requirements, scores, justifications, model/prompt versions, processing status, timestamps, and audit events. MongoDB stores session documents with embedded candidate state and TTL retention; object storage stores originals. Default retention is 30 days, configurable to 0-365 days; deletion removes object and database records, subject to an auditable deletion event. Encrypt in transit and at rest, minimize PII in logs, restrict access by workspace, and support export/deletion requests.
 
 ## 5. Non-Functional Requirements
 
@@ -188,17 +188,17 @@ Persist session/JD metadata, raw resume in private object storage, parsed JSON, 
 
 ### High-level flow
 
-`Client -> API -> object storage + PostgreSQL -> queue -> extraction worker -> parser/OCR -> structured JSON -> embedding worker -> scoring worker/LLM -> PostgreSQL -> API/dashboard`.
+`Client -> API -> object storage + MongoDB -> queue -> extraction worker -> parser/OCR -> structured JSON -> embedding worker -> scoring worker/LLM -> MongoDB -> API/dashboard`.
 
 The API creates an idempotent processing session. Workers update state transitions (`uploaded`, `text_extracted`, `parsed`, `scored`, `failed`) and emit structured logs/metrics. The dashboard polls or subscribes to status via a future SSE endpoint.
 
 ### Backend recommendation
 
-Use Python 3.12, FastAPI, Pydantic v2, SQLAlchemy, Alembic, a queue such as Celery/RQ/managed queues, `pypdf`, `python-docx`, and an OCR adapter (Tesseract or managed OCR). Python is recommended because its NLP, embedding, document parsing, evaluation, and LLM ecosystem is strongest. Node.js offers a single-language full-stack and good I/O performance, but adds more ecosystem choices for document/NLP work. Java is strong for enterprise governance and throughput, but is slower to prototype for this NLP-heavy MVP.
+Use Python 3.12, FastAPI, Pydantic v2, PyMongo, a queue such as Celery/RQ/managed queues, `pypdf`, `python-docx`, and an OCR adapter (Tesseract or managed OCR). Python is recommended because its NLP, embedding, document parsing, evaluation, and LLM ecosystem is strongest. Node.js offers a single-language full-stack and good I/O performance, but adds more ecosystem choices for document/NLP work. Java is strong for enterprise governance and throughput, but is slower to prototype for this NLP-heavy MVP.
 
 ### Database
 
-Use PostgreSQL for relational integrity across sessions, candidates, jobs, and processing attempts, with JSONB for evolving extraction payloads and `pgvector` for optional embeddings. A document DB would fit flexible resume JSON but makes relational filtering, audit records, retention, and consistent joins harder. Object storage is better than either database for original files.
+Use MongoDB for the MVP because candidate resumes, extraction payloads, scores, and justifications are naturally document-shaped and evolve as prompts improve. Store one screening session document with embedded job description and candidate records; use atomic positional updates and TTL indexes for retention. Use MongoDB Atlas Vector Search for production semantic retrieval or a compatible local representation during development. Object storage remains the preferred location for original files.
 
 ### LLM integration
 

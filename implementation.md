@@ -4,9 +4,9 @@
 
 **Goal:** Build an API-first MVP that ingests resumes, extracts structured candidate data, scores candidates against one job description, and optionally displays an evidence-backed shortlist.
 
-**Architecture:** Python 3.12/FastAPI owns the REST contract. A worker pipeline performs file extraction, optional OCR, schema-constrained LLM extraction, embeddings, and LLM scoring. PostgreSQL stores relational metadata and JSONB/`pgvector`; private object storage holds original files. An optional Next.js dashboard consumes only the API.
+**Architecture:** Python 3.12/FastAPI owns the REST contract. A worker pipeline performs file extraction, optional OCR, schema-constrained LLM extraction, embeddings, and LLM scoring. MongoDB stores session documents with embedded candidate state, scores, audit attempts, and TTL retention; private object storage holds original files. An optional Next.js dashboard consumes only the API.
 
-**Tech Stack:** Python, FastAPI, Pydantic v2, SQLAlchemy, Alembic, PostgreSQL, pgvector, Redis-backed queue (or equivalent), pypdf, python-docx, OCR adapter, provider-agnostic LLM client, pytest, and optional Next.js/TypeScript.
+**Tech Stack:** Python, FastAPI, Pydantic v2, PyMongo, MongoDB, local queue adapter (replaceable with Redis/Celery), pypdf, python-docx, OCR adapter, provider-agnostic LLM client, pytest, and optional Next.js/TypeScript.
 
 ## Global Constraints
 
@@ -29,7 +29,7 @@ app/
   config.py               # environment-backed settings
   api/                    # request/response models and route handlers
   domain/                 # canonical schemas and scoring types
-  db/                     # SQLAlchemy models, session, repositories
+  db/                     # MongoDB client, document repositories, indexes
   ingestion/              # validation, extraction, OCR, object storage
   llm/                    # provider interface, prompts, JSON validation
   matching/               # embeddings, rubric scoring, ranking/filtering
@@ -57,10 +57,10 @@ Each task below is complete only when its listed implementation, tests, and veri
 
 ### Task 0.1: Initialize the service
 
-- Create `pyproject.toml` with Python 3.12, FastAPI, Pydantic, SQLAlchemy, Alembic, pytest, ruff, and mypy.
+- Create `pyproject.toml` with Python 3.12, FastAPI, Pydantic, PyMongo, pytest, ruff, and mypy.
 - Create `app/main.py` with `/health` returning `{ "status": "ok" }`.
 - Create `app/config.py` for `DATABASE_URL`, `OBJECT_STORAGE_BUCKET`, `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `MAX_FILE_BYTES`, and `RETENTION_DAYS`.
-- Create `.env.example` without secrets and `docker-compose.yml` for PostgreSQL plus pgvector and Redis.
+- Create `.env.example` without secrets and `docker-compose.yml` for MongoDB and Redis.
 - Verify with `pytest`, `ruff check .`, and `curl http://localhost:8000/health`.
 - Commit: `chore: initialize resume screener service`.
 
@@ -129,7 +129,7 @@ Each task below is complete only when its listed implementation, tests, and veri
 ### Task 2.2: Add embeddings behind an interface
 
 - Create `app/matching/embeddings.py` with `EmbeddingClient.embed(text: str) -> list[float]` and `build_candidate_text(resume) -> str`.
-- Store embedding model/version and vector in pgvector when enabled; make the client no-op configurable for small batches.
+- Store embedding model/version and vector in MongoDB or Atlas Vector Search when enabled; make the client no-op configurable for small batches.
 - Use embeddings only as context/retrieval support, never as the sole explanation or final decision.
 - Test deterministic fake vectors, cache-key construction from content/model/version, and disabled-provider behavior.
 - Verify with `pytest tests/unit/test_embeddings.py -v`.
@@ -249,7 +249,7 @@ Each task below is complete only when its listed implementation, tests, and veri
 ## Decision Record
 
 - **Python over Node.js/Java:** Python has the best document, NLP, embedding, and LLM tooling for this workload; FastAPI supplies adequate I/O performance.
-- **PostgreSQL over document DB:** relational session/audit/retention integrity plus JSONB flexibility and pgvector are a better fit than a standalone document store.
+- **MongoDB over PostgreSQL:** resume extraction and match payloads are document-shaped and change with prompt versions; embedded session documents, atomic updates, and TTL indexes reduce persistence complexity. Atlas Vector Search is the production vector-search option.
 - **Embeddings plus constrained LLM:** embeddings improve semantic retrieval and cost; the LLM supplies rubric reasoning and evidence. Neither is trusted without validation.
 - **Async queue:** uploads and OCR/LLM calls exceed safe request durations and need per-file retries and partial batch success.
 - **Dashboard optional:** the API is the smallest independently useful MVP; the dashboard is a review accelerator and demo layer, not a prerequisite for backend correctness.
