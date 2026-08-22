@@ -1,9 +1,8 @@
 from typing import Protocol
 
-from sqlalchemy.orm import Session
-
-from app.db.repository import ResumeRepository
+from app.db.mongo_repository import MongoResumeRepository
 from app.domain.job import JobRequirements
+
 
 class JobRequirementsClient(Protocol):
     def extract_job(self, text: str) -> JobRequirements: ...
@@ -26,8 +25,7 @@ def normalized_job_payload(requirements: JobRequirements) -> dict[str, object]:
 
 
 def normalize_and_persist_job_description(
-    db: Session,
-    repository: ResumeRepository,
+    repository: MongoResumeRepository,
     session_id: str,
     source: str | JobRequirements,
     client: JobRequirementsClient | None,
@@ -35,6 +33,6 @@ def normalize_and_persist_job_description(
     requirements = normalize_job_description(source, client)
     raw_text = source if isinstance(source, str) else requirements.model_dump_json()
     repository.save_job_description(
-        db, session_id, raw_text, normalized_job_payload(requirements)
+        session_id, raw_text, normalized_job_payload(requirements)
     )
     return requirements

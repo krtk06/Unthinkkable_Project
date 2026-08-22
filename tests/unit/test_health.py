@@ -37,3 +37,10 @@ async def test_resume_schema_endpoint_exposes_required_contract() -> None:
 def test_settings_reject_non_positive_file_limit() -> None:
     with pytest.raises(ValidationError):
         Settings(max_file_bytes=0)
+
+
+def test_settings_default_to_local_mongodb() -> None:
+    settings = Settings()
+
+    assert settings.mongo_uri == "mongodb://localhost:27017"
+    assert settings.mongo_database == "resume_screener"

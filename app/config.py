@@ -7,7 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://resume:resume@localhost:5432/resume_screener"
+    mongo_uri: str = "mongodb://localhost:27017"
+    mongo_database: str = "resume_screener"
     object_storage_bucket: str = "resume-files"
     llm_provider: str = "disabled"
     llm_model: str = ""
