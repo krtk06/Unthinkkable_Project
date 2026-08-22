@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 
 SUPPORTED_TYPES: dict[str, set[str]] = {
@@ -19,6 +20,8 @@ def validate_upload(
     content_type: str,
     size_bytes: int,
     max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
+    file_bytes: bytes | None = None,
+    malware_scanner: Callable[[bytes], bool] | None = None,
 ) -> None:
     suffix = Path(filename).suffix.lower()
     allowed_types = SUPPORTED_TYPES.get(suffix)
@@ -36,3 +39,23 @@ def validate_upload(
         raise UploadValidationError(
             "FILE_TOO_LARGE", "Uploaded file exceeds the configured size limit"
         )
+    if file_bytes is not None:
+        signatures = {
+            ".pdf": file_bytes.startswith(b"%PDF-"),
+            ".docx": file_bytes.startswith(b"PK\x03\x04"),
+            ".txt": _is_utf8_text(file_bytes),
+        }
+        if not signatures[suffix]:
+            raise UploadValidationError(
+                "INVALID_FILE_SIGNATURE", "File content does not match its type"
+            )
+        if malware_scanner is not None and not malware_scanner(file_bytes):
+            raise UploadValidationError("MALWARE_DETECTED", "Malware scanner rejected the upload")
+
+
+def _is_utf8_text(file_bytes: bytes) -> bool:
+    try:
+        file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True

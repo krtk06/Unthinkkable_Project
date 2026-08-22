@@ -37,3 +37,19 @@ def test_rejects_file_over_size_limit() -> None:
 def test_rejects_empty_file() -> None:
     with pytest.raises(UploadValidationError, match="EMPTY_FILE"):
         validate_upload("resume.txt", "text/plain", size_bytes=0)
+
+
+def test_rejects_file_with_wrong_magic_bytes() -> None:
+    with pytest.raises(UploadValidationError, match="INVALID_FILE_SIGNATURE"):
+        validate_upload("resume.pdf", "application/pdf", size_bytes=4, file_bytes=b"nope")
+
+
+def test_rejects_file_reported_by_malware_scanner() -> None:
+    with pytest.raises(UploadValidationError, match="MALWARE_DETECTED"):
+        validate_upload(
+            "resume.txt",
+            "text/plain",
+            size_bytes=4,
+            file_bytes=b"safe",
+            malware_scanner=lambda _: False,
+        )

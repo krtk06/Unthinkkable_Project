@@ -77,3 +77,19 @@ def test_warns_when_ocr_confidence_is_low() -> None:
 def test_rejects_corrupt_pdf() -> None:
     with pytest.raises(ValueError, match="UNREADABLE_FILE"):
         extract_text(b"not a pdf", "application/pdf")
+
+
+def test_rejects_extracted_text_over_limit() -> None:
+    with pytest.raises(ValueError, match="TEXT_TOO_LONG"):
+        extract_text(b"a" * 11, "text/plain", max_text_chars=10)
+
+
+def test_rejects_pdf_over_page_limit() -> None:
+    writer = PdfWriter()
+    for _ in range(2):
+        writer.add_blank_page(width=612, height=792)
+    output = BytesIO()
+    writer.write(output)
+
+    with pytest.raises(ValueError, match="PAGE_LIMIT_EXCEEDED"):
+        extract_text(output.getvalue(), "application/pdf", max_pdf_pages=1)

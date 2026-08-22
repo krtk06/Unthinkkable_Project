@@ -30,6 +30,8 @@ def extract_text(
     content_type: str,
     ocr_client: OCRClient | None = None,
     min_text_chars_per_page: int = 20,
+    max_pdf_pages: int = 500,
+    max_text_chars: int = 20_000,
 ) -> ExtractionResult:
     normalized_type = content_type.lower()
     if normalized_type == "text/plain":
@@ -37,6 +39,8 @@ def extract_text(
             text = file_bytes.decode("utf-8").strip()
         except UnicodeDecodeError as error:
             raise ValueError("UNREADABLE_FILE: plain text is not valid UTF-8") from error
+        if len(text) > max_text_chars:
+            raise ValueError("TEXT_TOO_LONG: extracted text exceeds the configured limit")
         return ExtractionResult(text=text, page_count=1, ocr_used=False)
 
     if normalized_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -45,6 +49,8 @@ def extract_text(
             text = "\n".join(paragraph.text for paragraph in document.paragraphs).strip()
         except Exception as error:
             raise ValueError("UNREADABLE_FILE: DOCX could not be parsed") from error
+        if len(text) > max_text_chars:
+            raise ValueError("TEXT_TOO_LONG: extracted text exceeds the configured limit")
         return ExtractionResult(text=text, page_count=1, ocr_used=False)
 
     if normalized_type == "application/pdf":
@@ -60,6 +66,8 @@ def extract_text(
 
         text = "\n".join(part for part in page_text if part).strip()
         page_count = len(reader.pages)
+        if page_count > max_pdf_pages:
+            raise ValueError("PAGE_LIMIT_EXCEEDED: PDF exceeds the configured page limit")
         if page_count == 0 or len(text) >= min_text_chars_per_page * page_count:
             return ExtractionResult(text=text, page_count=page_count, ocr_used=False)
         if ocr_client is None:
@@ -75,11 +83,14 @@ def extract_text(
             warnings.append("OCR_INVALID_CONFIDENCE")
         elif ocr_result.confidence < 0.7:
             warnings.append("OCR_LOW_CONFIDENCE")
-        return ExtractionResult(
+        result = ExtractionResult(
             text=ocr_result.text.strip(),
             page_count=page_count,
             ocr_used=True,
             warnings=warnings,
         )
+        if len(result.text) > max_text_chars:
+            raise ValueError("TEXT_TOO_LONG: extracted text exceeds the configured limit")
+        return result
 
     raise ValueError("UNREADABLE_FILE: unsupported content type")

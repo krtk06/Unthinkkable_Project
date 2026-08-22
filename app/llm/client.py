@@ -6,7 +6,11 @@ from pydantic import BaseModel
 from app.domain.job import JobRequirements
 from app.domain.match import MatchResult
 from app.domain.resume import ExtractedResume
-from app.llm.validation import StructuredOutputError, parse_structured_output
+from app.llm.validation import (
+    StructuredOutputError,
+    parse_structured_output,
+    validate_match_evidence,
+)
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -54,7 +58,8 @@ class StructuredLLMClient:
             extracted_resume_json=resume.model_dump_json(),
             embedding_context=embedding_context,
         )
-        return self._complete_with_repair(prompt, MatchResult)
+        result = self._complete_with_repair(prompt, MatchResult)
+        return validate_match_evidence(result, resume)
 
     def _complete_with_repair(
         self, prompt: str, model: type[ModelT]

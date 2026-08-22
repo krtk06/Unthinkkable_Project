@@ -79,6 +79,41 @@ def test_delete_session_removes_owned_candidate_data(tmp_path: Path) -> None:
     )
 
     repository.save_parsed_resume(db, resume.id, {"schema_version": "1.0"})
-    repository.delete_session(db, session.id)
+    storage = type("Storage", (), {"delete_original": lambda self, uri: deleted.append(uri)})()
+    deleted: list[str] = []
+    repository.delete_session(db, session.id, storage=storage)
 
     assert repository.get_resume(db, resume.id) is None
+    assert deleted == ["local://" + "c" * 64]
+
+
+def test_repository_persists_extraction_metadata_and_attempt(tmp_path: Path) -> None:
+    db, repository = make_repository(tmp_path)
+    session = repository.create_session(db)
+    resume = repository.add_resume(
+        db,
+        session.id,
+        filename="resume.txt",
+        content_type="text/plain",
+        size_bytes=10,
+        checksum="d" * 64,
+        storage_uri="local://" + "d" * 64,
+    )
+
+    repository.record_attempt(db, resume.id, "parse", "started", attempt_number=1)
+    repository.save_extraction(
+        db,
+        resume.id,
+        text="resume text",
+        page_count=1,
+        ocr_used=False,
+        warnings=["warning"],
+        parsed={"schema_version": "1.0"},
+    )
+
+    db.refresh(resume)
+    assert resume.extracted_text == "resume text"
+    assert resume.page_count == 1
+    assert resume.ocr_used is False
+    assert resume.extraction_warnings == ["warning"]
+    assert len(resume.attempts) == 1

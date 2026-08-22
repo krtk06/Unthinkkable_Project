@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models import Candidate, Match, ResumeFile, ScreeningSession
+from app.db.models import Candidate, Match, ProcessingAttempt, ResumeFile, ScreeningSession
 from app.domain.match import MatchResult
 
 
@@ -64,6 +64,53 @@ class ResumeRepository:
         resume.status = "parsed"
         db.commit()
 
+    def save_extraction(
+        self,
+        db: Session,
+        resume_id: str,
+        *,
+        text: str,
+        page_count: int,
+        ocr_used: bool,
+        warnings: list[str],
+        parsed: dict[str, Any],
+    ) -> None:
+        resume = self.get_resume(db, resume_id)
+        if resume is None:
+            raise ValueError("RESUME_NOT_FOUND")
+        resume.extracted_text = text
+        resume.page_count = page_count
+        resume.ocr_used = ocr_used
+        resume.extraction_warnings = warnings
+        resume.parsed_json = parsed
+        resume.status = "parsed"
+        db.commit()
+
+    def record_attempt(
+        self,
+        db: Session,
+        resume_id: str,
+        stage: str,
+        status: str,
+        *,
+        attempt_number: int = 1,
+        error_code: str | None = None,
+    ) -> ProcessingAttempt:
+        resume = self.get_resume(db, resume_id)
+        if resume is None:
+            raise ValueError("RESUME_NOT_FOUND")
+        attempt = ProcessingAttempt(
+            resume_file_id=resume_id,
+            stage=stage,
+            status=status,
+            attempt_number=attempt_number,
+            error_code=error_code,
+        )
+        db.add(attempt)
+        db.commit()
+        db.refresh(attempt)
+        return attempt
+
     def save_match(self, db: Session, candidate_id: str, result: MatchResult) -> Match:
         match = Match(
             candidate_id=candidate_id,
@@ -83,9 +130,13 @@ class ResumeRepository:
     def get_resume(self, db: Session, resume_id: str) -> ResumeFile | None:
         return db.scalar(select(ResumeFile).where(ResumeFile.id == resume_id))
 
-    def delete_session(self, db: Session, session_id: str) -> None:
+    def delete_session(self, db: Session, session_id: str, *, storage: Any | None = None) -> None:
         record = db.get(ScreeningSession, session_id)
         if record is None:
             return
+        if storage is not None:
+            for candidate in record.candidates:
+                if candidate.resume_file is not None:
+                    storage.delete_original(candidate.resume_file.storage_uri)
         db.delete(record)
         db.commit()
