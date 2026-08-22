@@ -138,23 +138,26 @@ class ResumeRepository:
         raise ValueError("ATTEMPT_NUMBER_CONFLICT")
 
     def save_match(self, db: Session, candidate_id: str, result: MatchResult) -> Match:
-        match = Match(
-            candidate_id=candidate_id,
-            score=result.score,
-            required_coverage=result.required_coverage,
-            preferred_coverage=result.preferred_coverage,
-            result_json=result.model_dump(mode="json"),
-            provider=result.model.provider,
-            model=result.model.model,
-            prompt_version=result.model.prompt_version,
-        )
-        db.add(match)
+        match = db.scalar(select(Match).where(Match.candidate_id == candidate_id))
+        if match is None:
+            match = Match(candidate_id=candidate_id)
+            db.add(match)
+        match.score = result.score
+        match.required_coverage = result.required_coverage
+        match.preferred_coverage = result.preferred_coverage
+        match.result_json = result.model_dump(mode="json")
+        match.provider = result.model.provider
+        match.model = result.model.model
+        match.prompt_version = result.model.prompt_version
         db.commit()
         db.refresh(match)
         return match
 
     def get_resume(self, db: Session, resume_id: str) -> ResumeFile | None:
         return db.scalar(select(ResumeFile).where(ResumeFile.id == resume_id))
+
+    def get_candidate(self, db: Session, candidate_id: str) -> Candidate | None:
+        return db.scalar(select(Candidate).where(Candidate.id == candidate_id))
 
     def delete_session(self, db: Session, session_id: str, *, storage: Any | None = None) -> None:
         record = db.get(ScreeningSession, session_id)

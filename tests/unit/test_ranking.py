@@ -33,15 +33,38 @@ def test_supports_threshold_and_top_n_shortlisting() -> None:
 
 def test_filters_score_coverage_and_location() -> None:
     results = [match("a", 9, 1), match("b", 8, 0.5), match("c", 7, 1)]
-    locations = {"a": "London", "b": "New York", "c": "London"}
+    metadata = {
+        "a": {"location": "London", "required_skills_complete": True, "status": "scored"},
+        "b": {"location": "New York", "required_skills_complete": False},
+        "c": {"location": "London", "required_skills_complete": True},
+    }
 
     filtered = rank_matches(
         results,
         filters={"min_score": 8, "min_required_coverage": 0.9, "location": "London"},
-        metadata=locations,
+        metadata=metadata,
     )
 
     assert [item.candidate_id for item in filtered] == ["a"]
+
+
+def test_supports_extended_filters_and_pagination() -> None:
+    results = [match("a", 9), match("b", 8), match("c", 7)]
+    metadata = {
+        "a": {"experience_months": 12, "work_mode": "remote", "status": "scored"},
+        "b": {"experience_months": 24, "work_mode": "remote", "status": "scored"},
+        "c": {"experience_months": 36, "work_mode": "onsite", "status": "failed"},
+    }
+
+    filtered = rank_matches(
+        results,
+        filters={"min_experience_months": 24, "work_mode": "remote", "status": "scored"},
+        metadata=metadata,
+        offset=0,
+        limit=1,
+    )
+
+    assert [item.candidate_id for item in filtered] == ["b"]
 
 
 def test_rejects_combining_threshold_and_top_n() -> None:

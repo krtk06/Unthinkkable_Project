@@ -4,6 +4,7 @@ from typing import Protocol
 from app.domain.job import JobRequirements
 from app.domain.match import MatchResult
 from app.domain.resume import ExtractedResume
+from app.llm.validation import validate_match_evidence
 
 
 class ScoringClient(Protocol):
@@ -23,7 +24,8 @@ def score_candidate(
     wait = sleeper or _sleep
     for attempt in range(3):
         try:
-            return client.score_match(requirements, resume, embedding_context)
+            result = client.score_match(requirements, resume, embedding_context)
+            return validate_match_evidence(result, resume)
         except (TimeoutError, ConnectionError):
             if attempt == 2:
                 raise

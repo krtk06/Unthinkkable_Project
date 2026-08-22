@@ -138,10 +138,17 @@ def test_score_worker_persists_match_result(tmp_path: Path) -> None:
     result = worker.score_candidate(
         resume.candidate.id,
         JobRequirements(title="Engineer"),
-        ExtractedResume.model_validate(resume.parsed_json),
         FakeScoringClient(resume.candidate.id),
     )
 
     assert result.candidate_id == resume.candidate.id
     assert resume.candidate.match is not None
     assert resume.candidate.match.score == 8
+
+    repeated = worker.score_candidate(
+        resume.candidate.id,
+        JobRequirements(title="Engineer"),
+        FakeScoringClient(resume.candidate.id),
+    )
+
+    assert repeated.score == 8

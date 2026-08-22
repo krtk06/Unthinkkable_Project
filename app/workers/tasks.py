@@ -72,7 +72,7 @@ class ResumeWorker:
                 prompt_version=self.prompt_version,
             )
             return "parsed"
-        except ValueError as error:
+        except Exception as error:
             self.repository.update_stage(self.db, resume_id, "failed", str(error).split(":", 1)[0])
             self.repository.record_attempt(
                 self.db,
@@ -87,14 +87,34 @@ class ResumeWorker:
         self,
         candidate_id: str,
         requirements: JobRequirements,
-        resume: ExtractedResume,
         client: ScoringClient,
         embedding_context: str = "",
     ) -> MatchResult:
-        result = score_match(requirements, resume, embedding_context, client)
+        candidate = self.repository.get_candidate(self.db, candidate_id)
+        if candidate is None or candidate.resume_file is None:
+            raise ValueError("CANDIDATE_NOT_FOUND")
+        resume_record = candidate.resume_file
+        if resume_record.parsed_json is None:
+            raise ValueError("RESUME_NOT_PARSED")
+        resume = ExtractedResume.model_validate(resume_record.parsed_json)
+        self.repository.record_attempt(self.db, resume_record.id, "score", "started")
+        try:
+            result = score_match(requirements, resume, embedding_context, client)
+        except Exception as error:
+            self.repository.record_attempt(
+                self.db,
+                resume_record.id,
+                "score",
+                "failed",
+                error_code=type(error).__name__,
+            )
+            self.repository.update_stage(self.db, resume_record.id, "failed", type(error).__name__)
+            raise
         if result.candidate_id != candidate_id:
             raise ValueError("CANDIDATE_ID_MISMATCH")
         self.repository.save_match(self.db, candidate_id, result)
+        self.repository.record_attempt(self.db, resume_record.id, "score", "completed")
+        self.repository.update_stage(self.db, resume_record.id, "scored")
         return result
 
 
@@ -106,15 +126,17 @@ def score_candidate(
     worker: ResumeWorker,
     candidate_id: str,
     requirements: JobRequirements,
-    resume: ExtractedResume,
     client: ScoringClient,
     embedding_context: str = "",
 ) -> MatchResult:
-    return worker.score_candidate(candidate_id, requirements, resume, client, embedding_context)
+    return worker.score_candidate(candidate_id, requirements, client, embedding_context)
 
 
 def process_batch(worker: ResumeWorker, resume_ids: list[str]) -> Mapping[str, str]:
     statuses: dict[str, str] = {}
     for resume_id in resume_ids:
-        statuses[resume_id] = worker.process_resume(resume_id)
+        try:
+            statuses[resume_id] = worker.process_resume(resume_id)
+        except Exception:
+            statuses[resume_id] = "failed"
     return statuses
