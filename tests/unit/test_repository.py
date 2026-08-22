@@ -38,17 +38,27 @@ def test_repository_persists_resume_and_parsed_payload(tmp_path: Path) -> None:
 def test_repository_rejects_duplicate_resume_checksum_per_session(tmp_path: Path) -> None:
     db, repository = make_repository(tmp_path)
     session = repository.create_session(db)
-    values = {
-        "filename": "resume.txt",
-        "content_type": "text/plain",
-        "size_bytes": 10,
-        "checksum": "b" * 64,
-        "storage_uri": "local://" + "b" * 64,
-    }
-    repository.add_resume(db, session.id, **values)
+    checksum = "b" * 64
+    repository.add_resume(
+        db,
+        session.id,
+        filename="resume.txt",
+        content_type="text/plain",
+        size_bytes=10,
+        checksum=checksum,
+        storage_uri="local://" + checksum,
+    )
 
     try:
-        repository.add_resume(db, session.id, **values)
+        repository.add_resume(
+            db,
+            session.id,
+            filename="resume.txt",
+            content_type="text/plain",
+            size_bytes=10,
+            checksum=checksum,
+            storage_uri="local://" + checksum,
+        )
     except ValueError as error:
         assert str(error) == "DUPLICATE_RESUME"
     else:

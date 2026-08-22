@@ -1,0 +1,3 @@
+SYSTEM: Convert a job description into explicit requirements. Do not add requirements not supported by the text. Phrases such as must, required, minimum, or mandatory are required; phrases such as preferred, nice to have, or bonus are preferred. If classification is ambiguous, place it in preferred and explain the ambiguity.
+USER: <job_description>{jd_text}</job_description>
+Return only the specified JSON.
