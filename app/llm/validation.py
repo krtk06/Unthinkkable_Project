@@ -27,12 +27,16 @@ def parse_structured_output[ModelT: BaseModel](raw: str, model: type[ModelT]) ->
 
 def validate_match_evidence(result: MatchResult, resume: ExtractedResume) -> MatchResult:
     for evidence in result.evidence:
+        if not evidence.quote.strip():
+            raise StructuredOutputError(
+                "EVIDENCE_QUOTE_EMPTY", f"Evidence quote is empty for {evidence.source}"
+            )
         source_text = _resolve_source(evidence.source, resume)
         if source_text is None:
             raise StructuredOutputError(
                 "EVIDENCE_SOURCE_NOT_FOUND", f"Unknown evidence source: {evidence.source}"
             )
-        if evidence.quote not in source_text:
+        if not source_text.strip() or evidence.quote not in source_text:
             raise StructuredOutputError(
                 "EVIDENCE_QUOTE_NOT_FOUND", f"Evidence quote is not present in {evidence.source}"
             )

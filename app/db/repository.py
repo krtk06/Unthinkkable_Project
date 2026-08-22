@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -93,12 +93,22 @@ class ResumeRepository:
         stage: str,
         status: str,
         *,
-        attempt_number: int = 1,
+        attempt_number: int | None = None,
         error_code: str | None = None,
     ) -> ProcessingAttempt:
         resume = self.get_resume(db, resume_id)
         if resume is None:
             raise ValueError("RESUME_NOT_FOUND")
+        if attempt_number is None:
+            latest_attempt = db.scalar(
+                select(func.max(ProcessingAttempt.attempt_number)).where(
+                    ProcessingAttempt.resume_file_id == resume_id,
+                    ProcessingAttempt.stage == stage,
+                )
+            )
+            attempt_number = (latest_attempt or 0) + 1
+        if attempt_number < 1:
+            raise ValueError("INVALID_ATTEMPT_NUMBER")
         attempt = ProcessingAttempt(
             resume_file_id=resume_id,
             stage=stage,
@@ -137,6 +147,14 @@ class ResumeRepository:
         if storage is not None:
             for candidate in record.candidates:
                 if candidate.resume_file is not None:
-                    storage.delete_original(candidate.resume_file.storage_uri)
+                    uri = candidate.resume_file.storage_uri
+                    still_referenced = db.scalar(
+                        select(ResumeFile.id).where(
+                            ResumeFile.storage_uri == uri,
+                            ResumeFile.session_id != session_id,
+                        )
+                    )
+                    if still_referenced is None:
+                        storage.delete_original(uri)
         db.delete(record)
         db.commit()

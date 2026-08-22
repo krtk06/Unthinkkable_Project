@@ -83,3 +83,23 @@ def test_evidence_validation_rejects_unknown_source() -> None:
 
     with pytest.raises(StructuredOutputError, match="EVIDENCE_SOURCE_NOT_FOUND"):
         validate_match_evidence(result, resume)
+
+
+def test_evidence_validation_rejects_empty_quote() -> None:
+    resume = ExtractedResume.model_validate(valid_resume_payload())
+    result = MatchResult.model_validate(
+        {
+            "candidate_id": "candidate-1",
+            "score": 8,
+            "required_coverage": 1,
+            "preferred_coverage": 0,
+            "strengths": [],
+            "gaps": [],
+            "evidence": [{"claim": "Python", "source": "skills[0]", "quote": ""}],
+            "uncertainty": [],
+            "model": {"provider": "test", "model": "test", "prompt_version": "v1"},
+        }
+    )
+
+    with pytest.raises(StructuredOutputError, match="EVIDENCE_QUOTE_EMPTY"):
+        validate_match_evidence(result, resume)

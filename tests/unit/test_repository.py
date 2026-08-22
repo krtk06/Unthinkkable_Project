@@ -117,3 +117,23 @@ def test_repository_persists_extraction_metadata_and_attempt(tmp_path: Path) -> 
     assert resume.ocr_used is False
     assert resume.extraction_warnings == ["warning"]
     assert len(resume.attempts) == 1
+
+
+def test_repository_sequences_attempt_numbers(tmp_path: Path) -> None:
+    db, repository = make_repository(tmp_path)
+    session = repository.create_session(db)
+    resume = repository.add_resume(
+        db,
+        session.id,
+        filename="resume.txt",
+        content_type="text/plain",
+        size_bytes=10,
+        checksum="e" * 64,
+        storage_uri="local://" + "e" * 64,
+    )
+
+    first = repository.record_attempt(db, resume.id, "parse", "failed")
+    second = repository.record_attempt(db, resume.id, "parse", "started")
+
+    assert first.attempt_number == 1
+    assert second.attempt_number == 2

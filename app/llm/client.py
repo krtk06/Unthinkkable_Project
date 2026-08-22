@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, TypeVar
 
@@ -58,15 +59,20 @@ class StructuredLLMClient:
             extracted_resume_json=resume.model_dump_json(),
             embedding_context=embedding_context,
         )
-        result = self._complete_with_repair(prompt, MatchResult)
-        return validate_match_evidence(result, resume)
+        return self._complete_with_repair(
+            prompt, MatchResult, validator=lambda result: validate_match_evidence(result, resume)
+        )
 
     def _complete_with_repair(
-        self, prompt: str, model: type[ModelT]
+        self,
+        prompt: str,
+        model: type[ModelT],
+        validator: Callable[[ModelT], ModelT] | None = None,
     ) -> ModelT:
         raw = self.transport.complete(f"{prompt}\nPROMPT_VERSION: {self.prompt_version}")
         try:
-            return parse_structured_output(raw, model)
+            result = parse_structured_output(raw, model)
+            return validator(result) if validator is not None else result
         except StructuredOutputError as error:
             repair_prompt = (
                 "REPAIR: Return only valid JSON matching the requested schema. "
@@ -74,7 +80,8 @@ class StructuredLLMClient:
                 f"{prompt}\nPREVIOUS_RESPONSE:\n{raw}"
             )
             repaired = self.transport.complete(repair_prompt)
-            return parse_structured_output(repaired, model)
+            result = parse_structured_output(repaired, model)
+            return validator(result) if validator is not None else result
 
     def _load_prompt(self, filename: str) -> str:
         return (self.prompt_directory / filename).read_text(encoding="utf-8")

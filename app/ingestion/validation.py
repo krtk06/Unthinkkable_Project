@@ -39,18 +39,23 @@ def validate_upload(
         raise UploadValidationError(
             "FILE_TOO_LARGE", "Uploaded file exceeds the configured size limit"
         )
-    if file_bytes is not None:
-        signatures = {
-            ".pdf": file_bytes.startswith(b"%PDF-"),
-            ".docx": file_bytes.startswith(b"PK\x03\x04"),
-            ".txt": _is_utf8_text(file_bytes),
-        }
-        if not signatures[suffix]:
-            raise UploadValidationError(
-                "INVALID_FILE_SIGNATURE", "File content does not match its type"
-            )
-        if malware_scanner is not None and not malware_scanner(file_bytes):
-            raise UploadValidationError("MALWARE_DETECTED", "Malware scanner rejected the upload")
+    if file_bytes is None:
+        raise UploadValidationError("CONTENT_REQUIRED", "File bytes are required for validation")
+    if len(file_bytes) != size_bytes:
+        raise UploadValidationError("SIZE_MISMATCH", "Declared size does not match file contents")
+    signatures = {
+        ".pdf": file_bytes.startswith(b"%PDF-"),
+        ".docx": file_bytes.startswith(b"PK\x03\x04"),
+        ".txt": _is_utf8_text(file_bytes),
+    }
+    if not signatures[suffix]:
+        raise UploadValidationError(
+            "INVALID_FILE_SIGNATURE", "File content does not match its type"
+        )
+    if malware_scanner is None:
+        raise UploadValidationError("SCANNER_UNAVAILABLE", "A malware scanner is required")
+    if not malware_scanner(file_bytes):
+        raise UploadValidationError("MALWARE_DETECTED", "Malware scanner rejected the upload")
 
 
 def _is_utf8_text(file_bytes: bytes) -> bool:

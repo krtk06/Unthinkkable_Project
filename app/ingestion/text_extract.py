@@ -69,6 +69,8 @@ def extract_text(
         if page_count > max_pdf_pages:
             raise ValueError("PAGE_LIMIT_EXCEEDED: PDF exceeds the configured page limit")
         if page_count == 0 or len(text) >= min_text_chars_per_page * page_count:
+            if len(text) > max_text_chars:
+                raise ValueError("TEXT_TOO_LONG: extracted text exceeds the configured limit")
             return ExtractionResult(text=text, page_count=page_count, ocr_used=False)
         if ocr_client is None:
             return ExtractionResult(
