@@ -59,6 +59,11 @@ def _matches_filters(
         and candidate_metadata.get("experience_months", 0) < filters["min_experience_months"]
     ):
         return False
+    if (
+        "max_experience_months" in filters
+        and candidate_metadata.get("experience_months", 0) > filters["max_experience_months"]
+    ):
+        return False
     if "work_mode" in filters and candidate_metadata.get("work_mode") != filters["work_mode"]:
         return False
     if "status" in filters and candidate_metadata.get("status") != filters["status"]:

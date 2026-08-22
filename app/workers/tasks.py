@@ -1,5 +1,6 @@
 from collections import deque
 from collections.abc import Callable, Mapping
+from threading import Lock
 from typing import Protocol
 
 from sqlalchemy.orm import Session
@@ -9,8 +10,11 @@ from app.domain.job import JobRequirements
 from app.domain.match import MatchResult
 from app.domain.resume import ExtractedResume
 from app.ingestion.text_extract import ExtractionResult
+from app.matching.embeddings import EmbeddingClient, embed_candidate
 from app.matching.scoring import ScoringClient
 from app.matching.scoring import score_candidate as score_match
+
+_score_lock = Lock()
 
 
 class FileStorage(Protocol):
@@ -37,6 +41,8 @@ class ResumeWorker:
         provider: str,
         model: str,
         prompt_version: str,
+        embedding_client: EmbeddingClient | None = None,
+        embedding_model: str = "",
     ) -> None:
         self.db = db
         self.repository = repository
@@ -46,6 +52,8 @@ class ResumeWorker:
         self.provider = provider
         self.model = model
         self.prompt_version = prompt_version
+        self.embedding_client = embedding_client
+        self.embedding_model = embedding_model
 
     def process_resume(self, resume_id: str) -> str:
         resume = self.repository.get_resume(self.db, resume_id)
@@ -72,6 +80,13 @@ class ResumeWorker:
                 model=self.model,
                 prompt_version=self.prompt_version,
             )
+            if self.embedding_client is not None:
+                self.repository.save_embedding(
+                    self.db,
+                    resume_id,
+                    embed_candidate(parsed, self.embedding_client),
+                    self.embedding_model,
+                )
             return "parsed"
         except Exception as error:
             self.repository.update_stage(self.db, resume_id, "failed", str(error).split(":", 1)[0])
@@ -95,30 +110,38 @@ class ResumeWorker:
         if candidate is None or candidate.resume_file is None:
             raise ValueError("CANDIDATE_NOT_FOUND")
         resume_record = candidate.resume_file
-        existing_match = self.repository.get_match(self.db, candidate_id)
-        if existing_match is not None:
-            return MatchResult.model_validate(existing_match.result_json)
-        if resume_record.parsed_json is None:
-            raise ValueError("RESUME_NOT_PARSED")
-        resume = ExtractedResume.model_validate(resume_record.parsed_json)
-        self.repository.record_attempt(self.db, resume_record.id, "score", "started")
-        try:
-            result = score_match(requirements, resume, embedding_context, client)
-        except Exception as error:
-            self.repository.record_attempt(
-                self.db,
-                resume_record.id,
-                "score",
-                "failed",
-                error_code=type(error).__name__,
-            )
-            raise
-        if result.candidate_id != candidate_id:
-            raise ValueError("CANDIDATE_ID_MISMATCH")
-        self.repository.save_match(self.db, candidate_id, result)
-        self.repository.record_attempt(self.db, resume_record.id, "score", "completed")
-        self.repository.update_stage(self.db, resume_record.id, "scored")
-        return result
+        with _score_lock:
+            existing_match = self.repository.get_match(self.db, candidate_id)
+            if existing_match is not None:
+                return MatchResult.model_validate(existing_match.result_json)
+            if resume_record.parsed_json is None:
+                raise ValueError("RESUME_NOT_PARSED")
+            resume = ExtractedResume.model_validate(resume_record.parsed_json)
+            self.repository.record_attempt(self.db, resume_record.id, "score", "started")
+            try:
+                result = score_match(requirements, resume, embedding_context, client)
+            except Exception as error:
+                self.repository.record_attempt(
+                    self.db,
+                    resume_record.id,
+                    "score",
+                    "failed",
+                    error_code=type(error).__name__,
+                )
+                raise
+            if result.candidate_id != candidate_id:
+                self.repository.record_attempt(
+                    self.db,
+                    resume_record.id,
+                    "score",
+                    "failed",
+                    error_code="CANDIDATE_ID_MISMATCH",
+                )
+                raise ValueError("CANDIDATE_ID_MISMATCH")
+            self.repository.save_match(self.db, candidate_id, result)
+            self.repository.record_attempt(self.db, resume_record.id, "score", "completed")
+            self.repository.update_stage(self.db, resume_record.id, "scored")
+            return result
 
 
 def process_resume(worker: ResumeWorker, resume_id: str) -> str:

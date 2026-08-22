@@ -58,7 +58,12 @@ def test_supports_extended_filters_and_pagination() -> None:
 
     filtered = rank_matches(
         results,
-        filters={"min_experience_months": 24, "work_mode": "remote", "status": "scored"},
+        filters={
+            "min_experience_months": 24,
+            "max_experience_months": 24,
+            "work_mode": "remote",
+            "status": "scored",
+        },
         metadata=metadata,
         offset=0,
         limit=1,
