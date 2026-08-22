@@ -1,0 +1,74 @@
+from pathlib import Path
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from app.db.models import Base
+from app.db.repository import ResumeRepository
+
+
+def make_repository(tmp_path: Path) -> tuple[Session, ResumeRepository]:
+    engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
+    Base.metadata.create_all(engine)
+    return Session(engine), ResumeRepository()
+
+
+def test_repository_persists_resume_and_parsed_payload(tmp_path: Path) -> None:
+    db, repository = make_repository(tmp_path)
+    session = repository.create_session(db)
+
+    resume = repository.add_resume(
+        db,
+        session.id,
+        filename="resume.pdf",
+        content_type="application/pdf",
+        size_bytes=123,
+        checksum="a" * 64,
+        storage_uri="local://" + "a" * 64,
+    )
+    repository.update_stage(db, resume.id, "text_extracted")
+    repository.save_parsed_resume(db, resume.id, {"schema_version": "1.0", "skills": ["Python"]})
+
+    db.refresh(resume)
+    assert resume.status == "parsed"
+    assert resume.parsed_json == {"schema_version": "1.0", "skills": ["Python"]}
+    assert resume.candidate.session_id == session.id
+
+
+def test_repository_rejects_duplicate_resume_checksum_per_session(tmp_path: Path) -> None:
+    db, repository = make_repository(tmp_path)
+    session = repository.create_session(db)
+    values = {
+        "filename": "resume.txt",
+        "content_type": "text/plain",
+        "size_bytes": 10,
+        "checksum": "b" * 64,
+        "storage_uri": "local://" + "b" * 64,
+    }
+    repository.add_resume(db, session.id, **values)
+
+    try:
+        repository.add_resume(db, session.id, **values)
+    except ValueError as error:
+        assert str(error) == "DUPLICATE_RESUME"
+    else:
+        raise AssertionError("duplicate checksum should be rejected")
+
+
+def test_delete_session_removes_owned_candidate_data(tmp_path: Path) -> None:
+    db, repository = make_repository(tmp_path)
+    session = repository.create_session(db)
+    resume = repository.add_resume(
+        db,
+        session.id,
+        filename="resume.txt",
+        content_type="text/plain",
+        size_bytes=10,
+        checksum="c" * 64,
+        storage_uri="local://" + "c" * 64,
+    )
+
+    repository.save_parsed_resume(db, resume.id, {"schema_version": "1.0"})
+    repository.delete_session(db, session.id)
+
+    assert repository.get_resume(db, resume.id) is None
