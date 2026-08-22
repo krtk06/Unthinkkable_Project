@@ -89,6 +89,8 @@ class ResumeFile(Base):
     extraction_provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
     extraction_model: Mapped[str | None] = mapped_column(String(160), nullable=True)
     extraction_prompt_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(160), nullable=True)
     parsed_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="uploaded")
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)

@@ -17,3 +17,7 @@ def normalize_job_description(
     if client is None:
         raise ValueError("LLM_CLIENT_REQUIRED")
     return client.extract_job(source)
+
+
+def normalized_job_payload(requirements: JobRequirements) -> dict[str, object]:
+    return requirements.model_dump(mode="json")

@@ -9,7 +9,7 @@ from app.domain.job import JobRequirements
 from app.domain.match import MatchResult, ModelMetadata
 from app.domain.resume import ExtractedResume
 from app.ingestion.text_extract import ExtractionResult
-from app.workers.tasks import ResumeWorker, process_batch
+from app.workers.tasks import LocalTaskQueue, ResumeWorker, process_batch
 
 
 class FakeStorage:
@@ -152,3 +152,15 @@ def test_score_worker_persists_match_result(tmp_path: Path) -> None:
     )
 
     assert repeated.score == 8
+
+
+def test_local_task_queue_defers_and_runs_enqueued_work() -> None:
+    queue = LocalTaskQueue()
+    completed: list[str] = []
+
+    queue.enqueue(lambda: completed.append("done"))
+
+    assert queue.pending_count() == 1
+    assert completed == []
+    queue.run_next()
+    assert completed == ["done"]

@@ -14,6 +14,10 @@ class NullEmbeddingClient:
         return []
 
 
+def embed_candidate(resume: ExtractedResume, client: EmbeddingClient) -> list[float]:
+    return client.embed(build_candidate_text(resume))
+
+
 def build_candidate_text(resume: ExtractedResume) -> str:
     sections = [
         f"Location: {resume.candidate.location or ''}",

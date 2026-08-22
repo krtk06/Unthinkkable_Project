@@ -159,6 +159,36 @@ class ResumeRepository:
     def get_candidate(self, db: Session, candidate_id: str) -> Candidate | None:
         return db.scalar(select(Candidate).where(Candidate.id == candidate_id))
 
+    def get_match(self, db: Session, candidate_id: str) -> Match | None:
+        return db.scalar(select(Match).where(Match.candidate_id == candidate_id))
+
+    def save_job_description(
+        self, db: Session, session_id: str, raw_text: str, normalized: dict[str, Any]
+    ) -> None:
+        session = db.get(ScreeningSession, session_id)
+        if session is None:
+            raise ValueError("SESSION_NOT_FOUND")
+        if session.job_description is None:
+            from app.db.models import JobDescription
+
+            session.job_description = JobDescription(
+                raw_text=raw_text, normalized_json=normalized
+            )
+        else:
+            session.job_description.raw_text = raw_text
+            session.job_description.normalized_json = normalized
+        db.commit()
+
+    def save_embedding(
+        self, db: Session, resume_id: str, vector: list[float], model: str
+    ) -> None:
+        resume = self.get_resume(db, resume_id)
+        if resume is None:
+            raise ValueError("RESUME_NOT_FOUND")
+        resume.embedding = vector
+        resume.embedding_model = model
+        db.commit()
+
     def delete_session(self, db: Session, session_id: str, *, storage: Any | None = None) -> None:
         record = db.get(ScreeningSession, session_id)
         if record is None:

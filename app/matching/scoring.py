@@ -1,3 +1,4 @@
+import random
 from collections.abc import Callable
 from typing import Protocol
 
@@ -20,8 +21,10 @@ def score_candidate(
     client: ScoringClient,
     *,
     sleeper: Callable[[float], None] | None = None,
+    jitter: Callable[[float, float], float] | None = None,
 ) -> MatchResult:
     wait = sleeper or _sleep
+    add_jitter = jitter or random.uniform
     for attempt in range(3):
         try:
             result = client.score_match(requirements, resume, embedding_context)
@@ -29,7 +32,7 @@ def score_candidate(
         except (TimeoutError, ConnectionError):
             if attempt == 2:
                 raise
-            wait(0.5 * (2**attempt))
+            wait(0.5 * (2**attempt) + add_jitter(0, 0.1))
     raise RuntimeError("unreachable")
 
 

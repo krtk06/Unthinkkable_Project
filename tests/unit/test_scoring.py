@@ -73,6 +73,7 @@ def test_score_candidate_retries_transient_provider_failures() -> None:
         "context",
         client,
         sleeper=sleeps.append,
+        jitter=lambda _start, _end: 0.0,
     )
 
     assert result.score == 8

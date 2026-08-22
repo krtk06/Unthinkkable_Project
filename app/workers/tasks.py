@@ -1,4 +1,5 @@
-from collections.abc import Mapping
+from collections import deque
+from collections.abc import Callable, Mapping
 from typing import Protocol
 
 from sqlalchemy.orm import Session
@@ -50,8 +51,8 @@ class ResumeWorker:
         resume = self.repository.get_resume(self.db, resume_id)
         if resume is None:
             raise ValueError("RESUME_NOT_FOUND")
-        if resume.status == "parsed":
-            return "parsed"
+        if resume.status in {"parsed", "scored"}:
+            return resume.status
         self.repository.record_attempt(self.db, resume_id, "parse", "started")
         try:
             extraction = self.extractor.extract(
@@ -94,6 +95,9 @@ class ResumeWorker:
         if candidate is None or candidate.resume_file is None:
             raise ValueError("CANDIDATE_NOT_FOUND")
         resume_record = candidate.resume_file
+        existing_match = self.repository.get_match(self.db, candidate_id)
+        if existing_match is not None:
+            return MatchResult.model_validate(existing_match.result_json)
         if resume_record.parsed_json is None:
             raise ValueError("RESUME_NOT_PARSED")
         resume = ExtractedResume.model_validate(resume_record.parsed_json)
@@ -108,7 +112,6 @@ class ResumeWorker:
                 "failed",
                 error_code=type(error).__name__,
             )
-            self.repository.update_stage(self.db, resume_record.id, "failed", type(error).__name__)
             raise
         if result.candidate_id != candidate_id:
             raise ValueError("CANDIDATE_ID_MISMATCH")
@@ -140,3 +143,21 @@ def process_batch(worker: ResumeWorker, resume_ids: list[str]) -> Mapping[str, s
         except Exception:
             statuses[resume_id] = "failed"
     return statuses
+
+
+class LocalTaskQueue:
+    """Small local queue adapter; production deployments can replace it with Redis/Celery."""
+
+    def __init__(self) -> None:
+        self._pending: deque[Callable[[], object]] = deque()
+
+    def enqueue(self, task: Callable[[], object]) -> None:
+        self._pending.append(task)
+
+    def run_next(self) -> object | None:
+        if not self._pending:
+            return None
+        return self._pending.popleft()()
+
+    def pending_count(self) -> int:
+        return len(self._pending)

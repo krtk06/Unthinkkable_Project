@@ -70,6 +70,8 @@ def upgrade() -> None:
         sa.Column("extraction_provider", sa.String(80), nullable=True),
         sa.Column("extraction_model", sa.String(160), nullable=True),
         sa.Column("extraction_prompt_version", sa.String(80), nullable=True),
+        sa.Column("embedding", sa.JSON, nullable=True),
+        sa.Column("embedding_model", sa.String(160), nullable=True),
         sa.Column("parsed_json", sa.JSON, nullable=True),
         sa.Column("status", sa.String(32), nullable=False),
         sa.Column("error_code", sa.String(64), nullable=True),
