@@ -30,7 +30,6 @@ async def test_resume_schema_endpoint_exposes_required_contract() -> None:
         "experience",
         "education",
         "certifications",
-        "languages",
         "warnings",
     ]
 

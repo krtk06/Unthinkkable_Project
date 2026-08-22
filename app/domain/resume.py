@@ -1,7 +1,6 @@
-import re
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
+from pydantic import AnyUrl, BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 DateValue = Annotated[str, StringConstraints(pattern=r"^\d{4}(-\d{2})?$")]
 
@@ -13,7 +12,7 @@ class StrictModel(BaseModel):
 class Contact(StrictModel):
     email: EmailStr | None
     phone: str | None
-    url: str | None
+    url: AnyUrl | None
 
 
 class Candidate(StrictModel):
@@ -31,35 +30,25 @@ class Experience(StrictModel):
     description: str
     evidence: list[str] = Field(default_factory=list)
 
-    @field_validator("end_date")
-    @classmethod
-    def validate_end_date(cls, value: str | None) -> str | None:
-        if value is None or value == "present":
-            return value
-        if not re.fullmatch(r"\d{4}(-\d{2})?", value):
-            raise ValueError("end_date must be YYYY, YYYY-MM, or present")
-        return value
-
-
 class Education(StrictModel):
-    institution: str | None = None
-    degree: str | None = None
-    field: str | None = None
-    graduation_date: str | None = None
+    institution: str | None
+    degree: str | None
+    field: str | None
+    graduation_date: str | None
 
 
 class Certification(StrictModel):
     name: str
-    issuer: str | None = None
-    date: str | None = None
+    issuer: str | None
+    date: str | None
 
 
 class ExtractedResume(StrictModel):
-    schema_version: str = Field(pattern=r"^1\.0$")
+    schema_version: Literal["1.0"]
     candidate: Candidate
     skills: list[str]
     experience: list[Experience]
     education: list[Education]
     certifications: list[Certification]
-    languages: list[str]
+    languages: list[str] = Field(default_factory=list)
     warnings: list[str]

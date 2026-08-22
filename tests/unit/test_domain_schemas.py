@@ -10,7 +10,9 @@ def test_resume_schema_accepts_complete_candidate() -> None:
     resume = ExtractedResume(
         candidate=Candidate(
             name="Ada Lovelace",
-            contact=Contact(email="ada@example.com", phone=None, url=None),
+            contact=Contact.model_validate(
+                {"email": "ada@example.com", "phone": None, "url": "https://example.com/ada"}
+            ),
             location="London",
         ),
         skills=["Python"],
@@ -68,6 +70,20 @@ def test_resume_schema_preserves_missing_sections() -> None:
 def test_resume_schema_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         ExtractedResume.model_validate({"unexpected": "value"})
+
+
+def test_resume_schema_requires_nested_fields_and_fixed_version() -> None:
+    schema = ExtractedResume.model_json_schema()
+
+    assert schema["properties"]["schema_version"]["const"] == "1.0"
+    assert schema["$defs"]["Education"]["required"] == [
+        "institution",
+        "degree",
+        "field",
+        "graduation_date",
+    ]
+    assert schema["$defs"]["Certification"]["required"] == ["name", "issuer", "date"]
+    assert "languages" not in schema["required"]
 
 
 def test_experience_rejects_invalid_date() -> None:
