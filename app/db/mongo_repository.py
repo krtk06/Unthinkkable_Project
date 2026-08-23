@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import uuid4
 
-from pymongo import ASCENDING, ReturnDocument
+from pymongo import ASCENDING
 from pymongo.database import Database
 
 
@@ -88,7 +88,11 @@ class MongoResumeRepository:
 
     def claim_stage(self, candidate_id: str, expected: list[str], claimed: str) -> bool:
         result = self.sessions.update_one(
-            {"candidates.id": candidate_id, "candidates.resume.status": {"$in": expected}},
+            {
+                "candidates": {
+                    "$elemMatch": {"id": candidate_id, "resume.status": {"$in": expected}}
+                }
+            },
             {"$set": {"candidates.$.resume.status": claimed}},
         )
         return result.modified_count == 1
@@ -101,34 +105,33 @@ class MongoResumeRepository:
         *,
         error_code: str | None = None,
     ) -> None:
-        candidate = self.get_candidate(candidate_id)
-        if candidate is None:
-            raise ValueError("CANDIDATE_NOT_FOUND")
-        counter = self.sessions.find_one_and_update(
-            {"candidates.id": candidate_id},
-            {"$inc": {"candidates.$.resume.attempt_counters." + stage: 1}},
-            projection={"candidates": {"$elemMatch": {"id": candidate_id}}},
-            return_document=ReturnDocument.AFTER,
-        )
-        if counter is None:
-            raise ValueError("CANDIDATE_NOT_FOUND")
-        current = cast(dict[str, Any], counter["candidates"][0])
-        attempt_number = current["resume"]["attempt_counters"][stage]
-        self._update_candidate(
-            candidate_id,
-            {
-                "resume.attempts": [
-                    *current["resume"].get("attempts", []),
-                    {
-                        "stage": stage,
-                        "status": status,
-                        "attempt_number": attempt_number,
-                        "error_code": error_code,
-                        "created_at": datetime.now(UTC),
-                    },
-                ]
-            },
-        )
+        for _ in range(3):
+            candidate = self.get_candidate(candidate_id)
+            if candidate is None:
+                raise ValueError("CANDIDATE_NOT_FOUND")
+            current_attempts = candidate["resume"].get("attempts", [])
+            attempt_number = 1 + sum(item["stage"] == stage for item in current_attempts)
+            new_attempt = {
+                "stage": stage,
+                "status": status,
+                "attempt_number": attempt_number,
+                "error_code": error_code,
+                "created_at": datetime.now(UTC),
+            }
+            result = self.sessions.update_one(
+                {
+                    "candidates": {
+                        "$elemMatch": {
+                            "id": candidate_id,
+                            "resume.attempts": current_attempts,
+                        }
+                    }
+                },
+                {"$push": {"candidates.$.resume.attempts": new_attempt}},
+            )
+            if result.modified_count == 1:
+                return
+        raise ValueError("ATTEMPT_RECORD_CONFLICT")
 
     def save_extraction(
         self,
@@ -182,7 +185,11 @@ class MongoResumeRepository:
         if updated.modified_count == 1:
             return True
         result = self.sessions.update_one(
-            {"candidates.id": candidate_id, "candidates.match": {"$exists": False}},
+            {
+                "candidates": {
+                    "$elemMatch": {"id": candidate_id, "match": {"$exists": False}}
+                }
+            },
             {"$set": {"candidates.$.match": match, "candidates.$.resume.status": "scored"}},
         )
         return result.modified_count == 1
