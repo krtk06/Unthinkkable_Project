@@ -84,6 +84,38 @@ def test_mongo_repository_rejects_duplicate_checksum_in_session() -> None:
         repository.add_resume(session_id, **values)
 
 
+def test_mongo_match_update_targets_only_requested_candidate() -> None:
+    repository = make_repository()
+    session_id = repository.create_session()
+    first = repository.add_resume(
+        session_id,
+        filename="one.txt",
+        content_type="text/plain",
+        size_bytes=1,
+        checksum="e" * 64,
+        storage_uri="local://e",
+    )
+    second = repository.add_resume(
+        session_id,
+        filename="two.txt",
+        content_type="text/plain",
+        size_bytes=1,
+        checksum="f" * 64,
+        storage_uri="local://f",
+    )
+
+    repository.save_match(first["id"], {"candidate_id": first["id"], "score": 8})
+    repository.save_match(second["id"], {"candidate_id": second["id"], "score": 9})
+    repository.save_match(first["id"], {"candidate_id": first["id"], "score": 7})
+
+    first_match = repository.get_match(first["id"])
+    second_match = repository.get_match(second["id"])
+    assert first_match is not None
+    assert second_match is not None
+    assert first_match["score"] == 7
+    assert second_match["score"] == 9
+
+
 def test_mongo_repository_distinguishes_missing_session() -> None:
     repository = make_repository()
 

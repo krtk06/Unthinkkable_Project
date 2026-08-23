@@ -179,7 +179,11 @@ class MongoResumeRepository:
 
     def save_match(self, candidate_id: str, match: dict[str, Any]) -> bool:
         updated = self.sessions.update_one(
-            {"candidates.id": candidate_id, "candidates.match": {"$exists": True}},
+            {
+                "candidates": {
+                    "$elemMatch": {"id": candidate_id, "match": {"$exists": True}}
+                }
+            },
             {"$set": {"candidates.$.match": match, "candidates.$.resume.status": "scored"}},
         )
         if updated.modified_count == 1:

@@ -109,6 +109,8 @@ class ResumeWorker:
             existing_match = self.repository.get_match(candidate_id)
             if existing_match is not None:
                 return MatchResult.model_validate(existing_match)
+            if not self.repository.claim_stage(candidate_id, ["parsed"], "scoring"):
+                raise ValueError("SCORING_IN_PROGRESS")
             parsed = candidate["resume"].get("parsed_json")
             if parsed is None:
                 raise ValueError("RESUME_NOT_PARSED")
