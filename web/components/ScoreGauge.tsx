@@ -1,4 +1,8 @@
-import { useMemo } from "react";
+"use client";
+
+import { animate, motion, useMotionValue, useTransform } from "framer-motion";
+import { useEffect, useMemo } from "react";
+import { usePrefersReducedMotion } from "@/lib/hooks";
 import styles from "./ScoreGauge.module.css";
 
 export type BandKey = "absent" | "limited" | "partial" | "strong" | "exceptional";
@@ -22,6 +26,42 @@ interface ScoreGaugeProps {
   showLabel?: boolean;
 }
 
+function AnimatedScore({ value, bandClass }: { value: number; bandClass: string }) {
+  const prefersReduced = usePrefersReducedMotion();
+  const motionValue = useMotionValue(0);
+  const rounded = useTransform(motionValue, (latest) => Math.round(latest));
+
+  useEffect(() => {
+    if (prefersReduced) {
+      motionValue.set(value);
+      return;
+    }
+    const controls = animate(motionValue, value, {
+      duration: 0.6,
+      ease: "easeOut",
+    });
+    return () => controls.stop();
+  }, [value, motionValue, prefersReduced]);
+
+  if (prefersReduced) {
+    return (
+      <strong className={`${styles.scoreValue} ${bandClass}`}>
+        {value}
+        <span aria-hidden="true">/10</span>
+        <span className="visuallyHidden"> out of 10</span>
+      </strong>
+    );
+  }
+
+  return (
+    <strong className={`${styles.scoreValue} ${bandClass}`}>
+      <motion.span>{rounded}</motion.span>
+      <span aria-hidden="true">/10</span>
+      <span className="visuallyHidden"> out of 10</span>
+    </strong>
+  );
+}
+
 export default function ScoreGauge({ score, large = false, showLabel = false }: ScoreGaugeProps) {
   const clamped = Math.max(1, Math.min(10, Math.round(score)));
   const band = useMemo(() => bandForScore(clamped), [clamped]);
@@ -38,11 +78,7 @@ export default function ScoreGauge({ score, large = false, showLabel = false }: 
           />
         ))}
       </span>
-      <strong className={`${styles.scoreValue} ${bandClass}`}>
-        {clamped}
-        <span aria-hidden="true">/10</span>
-        <span className="visuallyHidden"> out of 10</span>
-      </strong>
+      <AnimatedScore value={clamped} bandClass={bandClass} />
       {showLabel && (
         <>
           {" "}
