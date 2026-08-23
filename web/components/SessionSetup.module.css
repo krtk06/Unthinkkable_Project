@@ -1,11 +1,13 @@
 .card {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: var(--space-5);
+  background: var(--color-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: 16px;
 }
 
 .cardTitle {
@@ -13,52 +15,56 @@
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--color-text);
 }
 
 .label {
   display: block;
   font-weight: 500;
-  margin-bottom: var(--space-2);
+  margin-bottom: 8px;
+  color: var(--color-text);
 }
 
 .textarea {
   width: 100%;
   min-height: 140px;
   resize: vertical;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: var(--space-3);
-  background: var(--surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(20, 20, 18, 0.8);
+  color: var(--color-text);
+}
+
+.textarea::placeholder {
+  color: var(--color-text-secondary);
 }
 
 .textarea:focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: 2px solid var(--color-accent);
   outline-offset: 0;
-  background: var(--paper);
+  border-color: var(--color-accent);
 }
 
 .fieldError {
-  color: var(--danger);
+  color: var(--color-error);
   font-size: 13px;
-  margin-top: var(--space-1);
-}
-
-.primaryButton,
-.secondaryButton,
-.dangerButton {
-  border-radius: var(--radius);
-  padding: var(--space-2) var(--space-4);
-  font-weight: 500;
-  border: 1px solid transparent;
+  margin-top: 4px;
 }
 
 .primaryButton {
-  background: var(--teal);
-  color: #fff;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  background: var(--color-accent);
+  color: #121210;
+  cursor: pointer;
+  transition: background 0.15s;
 }
 
 .primaryButton:hover:not(:disabled) {
-  background: var(--teal-dark);
+  background: var(--color-accent-hover);
 }
 
 .primaryButton:disabled {
@@ -67,13 +73,14 @@
 }
 
 .normalized {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: var(--space-3);
+  background: rgba(20, 20, 18, 0.6);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
   font-size: 13px;
   display: grid;
-  gap: var(--space-2);
+  gap: 8px;
+  color: var(--color-text);
 }
 
 .normalizedTitle {
@@ -82,5 +89,5 @@
 }
 
 .ambiguity {
-  color: var(--band-limited);
+  color: var(--color-warning);
 }

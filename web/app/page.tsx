@@ -10,7 +10,6 @@ import Uploader from "@/components/Uploader";
 import { api } from "@/lib/api";
 import { exportCsv, exportJson } from "@/lib/export";
 import type { Match, SessionStatus, UploadResult } from "@/lib/types";
-import styles from "./page.module.css";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -51,7 +50,6 @@ export default function HomePage() {
     }
   }, [sessionId, filters]);
 
-  // Poll status while work is in flight; refresh matches when it settles.
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
@@ -89,7 +87,6 @@ export default function HomePage() {
 
   function handleUploaded(result: UploadResult) {
     setSelectedCandidateId(null);
-    // Kick a status fetch immediately; the polling effect continues from there.
     void api
       .getSessionStatus(sessionId ?? result.session_id)
       .then((next) => setStatus(next))
@@ -111,30 +108,32 @@ export default function HomePage() {
   }
 
   return (
-    <div className={styles.page}>
-      <header className={styles.masthead}>
+    <div className="max-w-[1280px] mx-auto p-6 grid gap-8">
+      <header className="flex flex-wrap justify-between items-baseline gap-3 border-b border-border pb-4">
         <div>
-          <h1 className={styles.title}>Smart Resume Screener</h1>
-          <p className={styles.subtitle}>
+          <h1 className="text-[22px] font-semibold tracking-tight text-text">
+            Smart Resume Screener
+          </h1>
+          <p className="mt-1 text-sm text-text-secondary">
             Evidence-based shortlisting for one role at a time.
           </p>
         </div>
-        <p className="disclaimer" style={{ margin: 0 }}>
+        <p className="text-sm text-text-secondary border-l-2 border-accent pl-3 py-1 bg-surface rounded-r-lg">
           AI scores are decision support. A human makes the hiring decision.
         </p>
       </header>
 
-      <div className={styles.layout}>
-        <aside className={styles.rail}>
+      <div className="grid gap-8 items-start lg:grid-cols-[360px_1fr]">
+        <aside className="flex flex-col gap-5 lg:sticky lg:top-6">
           <JobDescriptionForm sessionId={sessionId} onSessionCreated={handleSessionCreated} />
           <Uploader sessionId={sessionId} onUploaded={handleUploaded} />
         </aside>
 
-        <main className={styles.mainColumn} aria-label="Screening results">
+        <main className="grid gap-5 min-w-0" aria-label="Screening results">
           {errorBanner && (
-            <p className={styles.banner} role="alert">
+            <div className="px-4 py-3 rounded-lg bg-error/10 border border-error text-error text-sm" role="alert">
               {errorBanner}
-            </p>
+            </div>
           )}
 
           {status && (
@@ -154,17 +153,17 @@ export default function HomePage() {
                 onSelect={(id) => setSelectedCandidateId((current) => (current === id ? null : id))}
               />
               {matches.length > 0 && (
-                <div className={styles.toolbar}>
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="primaryButton"
+                    className="px-4 py-2 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors"
                     onClick={() => exportJson(matches, sessionId ?? "")}
                   >
                     Export JSON
                   </button>
                   <button
                     type="button"
-                    className="primaryButton"
+                    className="px-4 py-2 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors"
                     onClick={() => exportCsv(matches)}
                   >
                     Export CSV
@@ -185,8 +184,12 @@ export default function HomePage() {
           )}
 
           {sessionId && (
-            <div className={styles.toolbar}>
-              <button type="button" className="dangerButton" onClick={() => void handleDeleteSession()}>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg border border-error text-error hover:bg-error/10 transition-colors font-medium"
+                onClick={() => void handleDeleteSession()}
+              >
                 Delete this session and its data
               </button>
             </div>

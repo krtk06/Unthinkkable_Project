@@ -9,16 +9,17 @@
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--ink-soft);
-  border-bottom: 1px solid var(--ink);
-  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px 12px;
   white-space: nowrap;
 }
 
 .table td {
-  border-bottom: 1px solid var(--line);
-  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  padding: 12px;
   vertical-align: top;
+  color: var(--color-text);
 }
 
 .rowButton {
@@ -26,15 +27,19 @@
   border: none;
   padding: 0;
   font-family: var(--font-data);
-  color: var(--teal);
+  color: var(--color-accent);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
+.rowButton:hover {
+  color: var(--color-accent-hover);
+}
+
 .sortHeader {
   display: inline-flex;
-  gap: var(--space-1);
+  gap: 4px;
 }
 
 .sortArrow {
@@ -43,7 +48,7 @@
 
 .rankCell {
   font-family: var(--font-data);
-  color: var(--ink-soft);
+  color: var(--color-text-secondary);
 }
 
 .coverage {
@@ -53,9 +58,9 @@
 
 .empty,
 .loading {
-  padding: var(--space-6);
+  padding: 32px;
   text-align: center;
-  color: var(--ink-soft);
-  border: 1px dashed var(--line);
-  border-radius: var(--radius);
+  color: var(--color-text-secondary);
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
 }

@@ -1,17 +1,20 @@
 .dropzone {
-  border: 2px dashed var(--line);
-  border-radius: var(--radius);
-  padding: var(--space-5);
+  border: 2px dashed var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
   text-align: center;
-  color: var(--ink-soft);
-  background: var(--surface);
-  transition: border-color 120ms ease, background 120ms ease;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 
 .dropzoneActive {
-  border-color: var(--teal);
-  background: #eef4f3;
-  color: var(--ink);
+  border-color: var(--color-accent);
+  background: rgba(52, 211, 153, 0.05);
+  color: var(--color-text);
+  box-shadow: 0 0 20px 4px rgba(52, 211, 153, 0.1);
 }
 
 .fileList {
@@ -19,17 +22,18 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--space-1);
+  gap: 4px;
   font-size: 13px;
 }
 
 .fileItem {
   display: flex;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-1) var(--space-2);
-  background: var(--surface);
-  border-radius: var(--radius);
+  gap: 12px;
+  padding: 4px 8px;
+  background: rgba(20, 20, 18, 0.6);
+  border-radius: 6px;
+  color: var(--color-text);
 }
 
 .fileName {
@@ -42,9 +46,9 @@
 }
 
 .stateOk {
-  color: var(--band-strong);
+  color: var(--color-success);
 }
 
 .stateError {
-  color: var(--danger);
+  color: var(--color-error);
 }

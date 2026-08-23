@@ -1,14 +1,14 @@
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: 12px;
   align-items: end;
 }
 
 .control {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 4px;
 }
 
 .control label {
@@ -16,34 +16,49 @@
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--color-text-secondary);
 }
 
 .control input,
 .control select {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: var(--space-1) var(--space-2);
-  background: var(--paper);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: rgba(20, 20, 18, 0.8);
+  color: var(--color-text);
   min-height: 32px;
+}
+
+.control input:focus,
+.control select:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 0;
+  border-color: var(--color-accent);
 }
 
 .modeToggle {
   display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
   overflow: hidden;
 }
 
 .modeToggle button {
   border: none;
-  background: var(--paper);
-  padding: var(--space-1) var(--space-3);
+  background: rgba(20, 20, 18, 0.8);
+  padding: 4px 12px;
   font-size: 13px;
   font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.modeToggle button:hover {
+  background: rgba(30, 30, 28, 0.8);
 }
 
 .modeToggle button[aria-pressed="true"] {
-  background: var(--teal);
-  color: #fff;
+  background: var(--color-accent);
+  color: #121210;
 }
