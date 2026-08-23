@@ -179,7 +179,10 @@ class LocalTaskQueue:
 
 
 def process_candidate_job(worker: ResumeWorker, candidate_id: str) -> None:
-    if worker.process_resume(candidate_id) != "parsed":
+    status = worker.process_resume(candidate_id)
+    if status == "failed":
+        raise RuntimeError("RESUME_PROCESSING_FAILED")
+    if status == "scored":
         return
     candidate = worker.repository.get_candidate(candidate_id)
     if candidate is None:

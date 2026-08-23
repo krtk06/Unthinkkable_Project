@@ -22,6 +22,11 @@ class AtlasTaskQueue:
         self.jobs.create_index("batch_id")
 
     def enqueue(self, task: str, payload: dict[str, Any], batch_id: str | None = None) -> str:
+        idempotency_key = payload.get("idempotency_key")
+        if idempotency_key is not None:
+            existing = self.jobs.find_one({"task": task, "idempotency_key": idempotency_key})
+            if existing is not None:
+                return str(existing["_id"])
         job_id = uuid4().hex
         now = datetime.now(UTC)
         self.jobs.insert_one(
@@ -29,6 +34,7 @@ class AtlasTaskQueue:
                 "_id": job_id,
                 "task": task,
                 "payload": payload,
+                "idempotency_key": idempotency_key,
                 "batch_id": batch_id,
                 "status": "queued",
                 "attempts": 0,

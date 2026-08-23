@@ -19,6 +19,8 @@ class MongoResumeRepository:
     ) -> None:
         self.database = database
         self.sessions = database["sessions"]
+        self.audit_events = database["audit_events"]
+        self.files = database["resume_files"]
         self.retention_days = retention_days
         self._ensure_indexes()
 
@@ -26,6 +28,7 @@ class MongoResumeRepository:
         self.sessions.create_index("expires_at", expireAfterSeconds=0)
         self.sessions.create_index([("candidates.resume.checksum", ASCENDING)])
         self.sessions.create_index([("candidates.id", ASCENDING)])
+        self.files.create_index("expires_at", expireAfterSeconds=0)
 
     def create_session(self) -> str:
         session_id = _id()
@@ -74,6 +77,19 @@ class MongoResumeRepository:
             raise ValueError("SESSION_NOT_FOUND")
         if result.modified_count != 1:
             raise ValueError("DUPLICATE_RESUME")
+        session = self.get_session(session_id)
+        if session is not None:
+            self.files.update_one(
+                {"candidate_id": candidate["id"]},
+                {
+                    "$set": {
+                        "candidate_id": candidate["id"],
+                        "storage_uri": resume["storage_uri"],
+                        "expires_at": session["expires_at"],
+                    }
+                },
+                upsert=True,
+            )
         return candidate
 
     def get_candidate(self, candidate_id: str) -> dict[str, Any] | None:
@@ -225,8 +241,16 @@ class MongoResumeRepository:
         return cast(list[dict[str, Any]], session.get("candidates", []))
 
     def delete_session(self, session_id: str) -> None:
-        self.sessions.update_one(
-            {"_id": session_id},
-            {"$push": {"audit_events": {"event": "session_deleted", "at": datetime.now(UTC)}}},
+        self.audit_events.insert_one(
+            {"event": "session_deleted", "session_id": session_id, "at": datetime.now(UTC)}
         )
         self.sessions.delete_one({"_id": session_id})
+
+    def cleanup_expired_files(self, storage: Any) -> int:
+        expired = list(self.files.find({"expires_at": {"$lt": datetime.now(UTC)}}))
+        deleted = 0
+        for file_record in expired:
+            storage.delete_original(file_record["storage_uri"])
+            self.files.delete_one({"_id": file_record["_id"]})
+            deleted += 1
+        return deleted

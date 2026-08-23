@@ -157,7 +157,11 @@ async def upload_resumes(
                 "status": candidate["resume"]["status"],
             }
         )
-        job_id = queue.enqueue("process_candidate", {"candidate_id": candidate["id"]}, batch_id)
+        job_id = queue.enqueue(
+            "process_candidate",
+            {"candidate_id": candidate["id"], "idempotency_key": idempotency_key},
+            batch_id,
+        )
         accepted[-1]["job_id"] = job_id
     return {
         "session_id": session_id,
@@ -214,6 +218,8 @@ def session_matches(
     status: str | None = None,
     location: str | None = None,
     work_mode: str | None = None,
+    required_skills_complete: bool | None = None,
+    min_experience_months: int | None = None,
 ) -> dict[str, Any]:
     try:
         candidates = repository.list_candidates(session_id)
@@ -233,6 +239,12 @@ def session_matches(
                     .get("location")
                 ),
                 "work_mode": candidate.get("resume", {}).get("parsed_json", {}).get("work_mode"),
+                "required_skills_complete": candidate.get("resume", {})
+                .get("parsed_json", {})
+                .get("required_skills_complete"),
+                "experience_months": candidate.get("resume", {})
+                .get("parsed_json", {})
+                .get("experience_months", 0),
             },
         }
         for candidate in candidates
@@ -250,6 +262,18 @@ def session_matches(
         if min_required_coverage is None
         or match.get("required_coverage", 0) >= min_required_coverage
     ]
+    if required_skills_complete is not None:
+        matches = [
+            match
+            for match in matches
+            if match["_metadata"].get("required_skills_complete") == required_skills_complete
+        ]
+    if min_experience_months is not None:
+        matches = [
+            match
+            for match in matches
+            if match["_metadata"].get("experience_months", 0) >= min_experience_months
+        ]
     matches = [
         match
         for match in matches
