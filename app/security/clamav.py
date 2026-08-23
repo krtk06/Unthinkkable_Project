@@ -1,6 +1,7 @@
 from io import BytesIO
+from typing import Any, cast
 
-import clamd
+import clamd  # type: ignore[import-untyped]
 
 
 class ClamAVScanner:
@@ -9,5 +10,9 @@ class ClamAVScanner:
         self.port = port
 
     def __call__(self, file_bytes: bytes) -> bool:
-        result = clamd.ClamdNetworkSocket(self.host, self.port).instream(BytesIO(file_bytes))
-        return result.get("stream", ("ERROR", "missing result"))[0] == "OK"
+        try:
+            result = clamd.ClamdNetworkSocket(self.host, self.port).instream(BytesIO(file_bytes))
+        except (OSError, ConnectionError, clamd.ConnectionError):
+            return False
+        result = cast(dict[str, Any], result)
+        return bool(result.get("stream", ("ERROR", "missing result"))[0] == "OK")
