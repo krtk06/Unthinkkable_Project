@@ -1,0 +1,98 @@
+[
+  {
+    "resume_id": "syn_001",
+    "resume_text": "Sample Candidate One\nEmail: candidate.one@example.com\nPhone: 555-0100\nLocation: Berlin\nSkills: Python, REST APIs, SQL\nExperience:\n- Backend Engineer at Sample Logistics GmbH, 2021-03 to present (48 months). Built and operated Python REST services for four years.\nEducation: BSc Computer Science, Sample University, 2020",
+    "expected_fields": {
+      "candidate.name": "Sample Candidate One",
+      "candidate.contact.email": "candidate.one@example.com",
+      "skills": ["Python", "REST APIs", "SQL"],
+      "experience.companies": ["Sample Logistics GmbH"]
+    },
+    "expected_requirements": {
+      "required": ["Python", "REST APIs"],
+      "preferred": ["SQL"]
+    },
+    "reviewer_scores": [8, 8],
+    "notes": "Strong required coverage; preferred skill present."
+  },
+  {
+    "resume_id": "syn_002",
+    "resume_text": "Sample Candidate Two\nEmail: candidate.two@example.com\nPhone: 555-0101\nLocation: Remote\nSkills: Python\nExperience:\n- Junior Developer at Example Retail AG, 2023-01 to present (20 months). Wrote Python scripts for inventory reporting.\nEducation: BSc Software Engineering, Example College, 2022",
+    "expected_fields": {
+      "candidate.name": "Sample Candidate Two",
+      "candidate.contact.email": "candidate.two@example.com",
+      "skills": ["Python"],
+      "experience.companies": ["Example Retail AG"]
+    },
+    "expected_requirements": {
+      "required": ["Python", "REST APIs"],
+      "preferred": ["SQL"]
+    },
+    "reviewer_scores": [5, 6],
+    "notes": "Partial alignment: one required skill evidenced, REST absent."
+  },
+  {
+    "resume_id": "syn_003",
+    "resume_text": "Sample Candidate Three\nEmail: candidate.three@example.com\nPhone: 555-0102\nLocation: Munich\nSkills: Java, Kubernetes, SQL\nExperience:\n- Platform Engineer at Demo Bank SE, 2019-06 to present (74 months). Ran Kubernetes clusters and SQL warehouses.\nEducation: MSc Information Systems, Demo University, 2019",
+    "expected_fields": {
+      "candidate.name": "Sample Candidate Three",
+      "candidate.contact.email": "candidate.three@example.com",
+      "skills": ["Java", "Kubernetes", "SQL"],
+      "experience.companies": ["Demo Bank SE"]
+    },
+    "expected_requirements": {
+      "required": ["Python", "REST APIs"],
+      "preferred": ["SQL"]
+    },
+    "reviewer_scores": [2, 3],
+    "notes": "No credible evidence for either required requirement."
+  },
+  {
+    "resume_id": "syn_004",
+    "resume_text": "Sample Candidate Four\nEmail: null\nPhone: null\nLocation: Hamburg\nSkills: Python, REST APIs\nExperience:\n- API Developer at Fictional Health OY, 2020-01 to present (68 months). Developed Python REST APIs for clinical systems.\nEducation: null",
+    "expected_fields": {
+      "candidate.name": "Sample Candidate Four",
+      "candidate.contact.email": null,
+      "skills": ["Python", "REST APIs"],
+      "experience.companies": ["Fictional Health OY"]
+    },
+    "expected_requirements": {
+      "required": ["Python", "REST APIs"],
+      "preferred": ["SQL"]
+    },
+    "reviewer_scores": [8, 9],
+    "notes": "Very strong on required skills with depth; contact fields missing must stay null."
+  },
+  {
+    "resume_id": "syn_005",
+    "resume_text": "Sample Candidate Five\nEmail: candidate.five@example.com\nPhone: 555-0104\nLocation: Berlin\nSkills: Python, REST APIs, SQL, Kubernetes\nExperience:\n- Senior Engineer at Madeup Media KG, 2017-02 to present (102 months). Led Python REST platform work and Kubernetes migration.\nEducation: PhD Computer Science, Madeup University, 2017",
+    "expected_fields": {
+      "candidate.name": "Sample Candidate Five",
+      "candidate.contact.email": "candidate.five@example.com",
+      "skills": ["Python", "REST APIs", "SQL", "Kubernetes"],
+      "experience.companies": ["Madeup Media KG"]
+    },
+    "expected_requirements": {
+      "required": ["Python", "REST APIs"],
+      "preferred": ["SQL"]
+    },
+    "reviewer_scores": [10, 10],
+    "notes": "Exceptional alignment exceeding the role bar."
+  },
+  {
+    "resume_id": "syn_006",
+    "resume_text": "Sample Candidate Six\nEmail: candidate.six@example.com\nPhone: null\nLocation: Leipzig\nSkills: JavaScript, GraphQL\nExperience:\n- Frontend Developer at Placeholder Studio AB, 2022-05 to present (39 months). Built React dashboards with GraphQL.\nEducation: BA Media Design, Placeholder College, 2022",
+    "expected_fields": {
+      "candidate.name": "Sample Candidate Six",
+      "candidate.contact.email": "candidate.six@example.com",
+      "skills": ["JavaScript", "GraphQL"],
+      "experience.companies": ["Placeholder Studio AB"]
+    },
+    "expected_requirements": {
+      "required": ["Python", "REST APIs"],
+      "preferred": ["SQL"]
+    },
+    "reviewer_scores": [1, 2],
+    "notes": "Major required requirements absent."
+  }
+]
