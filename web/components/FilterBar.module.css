@@ -27,6 +27,7 @@
   background: rgba(20, 20, 18, 0.8);
   color: var(--color-text);
   min-height: 32px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .control input:focus,

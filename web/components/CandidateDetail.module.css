@@ -93,6 +93,12 @@
   font-size: 13px;
   font-family: var(--font-data);
   color: var(--color-text);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.tag:hover {
+  border-color: var(--color-border-hover);
+  background: rgba(30, 30, 28, 0.8);
 }
 
 .evidenceList {

@@ -20,6 +20,11 @@
   padding: 12px;
   vertical-align: top;
   color: var(--color-text);
+  transition: background 0.15s;
+}
+
+.table tbody tr:hover {
+  background: var(--color-surface-hover);
 }
 
 .rowButton {
@@ -31,6 +36,7 @@
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
+  transition: color 0.15s;
 }
 
 .rowButton:hover {
