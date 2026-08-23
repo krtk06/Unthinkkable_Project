@@ -47,10 +47,24 @@ class MongoResumeRepository:
         return cast(dict[str, Any] | None, self.sessions.find_one({"_id": session_id}))
 
     def add_resume(self, session_id: str, **resume: Any) -> dict[str, Any]:
+        idempotency_key = resume.get("idempotency_key")
+        if idempotency_key is not None:
+            existing = self.sessions.find_one(
+                {"_id": session_id, "candidates.resume.idempotency_key": idempotency_key},
+                {"candidates": {"$elemMatch": {"resume.idempotency_key": idempotency_key}}},
+            )
+            if existing and existing.get("candidates"):
+                return cast(dict[str, Any], existing["candidates"][0])
         candidate = {
             "id": _id(),
             "session_id": session_id,
-            "resume": {**resume, "status": "uploaded", "attempts": [], "attempt_counters": {}},
+            "job_id": _id(),
+            "resume": {
+                **resume,
+                "status": "queued",
+                "attempts": [],
+                "attempt_counters": {},
+            },
         }
         result = self.sessions.update_one(
             {"_id": session_id, "candidates.resume.checksum": {"$ne": resume["checksum"]}},

@@ -60,7 +60,7 @@ async def test_create_session_and_upload_resume(client: httpx.AsyncClient) -> No
 
     assert response.status_code == 202
     assert response.json()["accepted"] == 1
-    assert response.json()["files"][0]["status"] == "uploaded"
+    assert response.json()["files"][0]["status"] == "queued"
 
 
 @pytest.mark.anyio

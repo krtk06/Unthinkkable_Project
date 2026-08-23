@@ -59,7 +59,9 @@ class ResumeWorker:
         status = str(resume["status"])
         if status in {"parsed", "scored", "score_failed"}:
             return status
-        if not self.repository.claim_stage(candidate_id, ["uploaded", "failed"], "processing"):
+        if not self.repository.claim_stage(
+            candidate_id, ["queued", "uploaded", "failed"], "processing"
+        ):
             current = self.repository.get_candidate(candidate_id)
             return str(current["resume"]["status"]) if current is not None else "failed"
         self.repository.record_attempt(candidate_id, "parse", "started")

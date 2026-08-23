@@ -1,7 +1,16 @@
 import hashlib
 from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import (
@@ -88,6 +97,7 @@ async def upload_resumes(
     scanner: Annotated[ClamAVScanner, Depends(get_malware_scanner)],
     background_tasks: BackgroundTasks,
     worker: Annotated[ResumeWorker, Depends(get_worker)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict[str, Any]:
     if repository.get_session(session_id) is None:
         raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404)
@@ -116,6 +126,7 @@ async def upload_resumes(
                 size_bytes=len(contents),
                 checksum=checksum,
                 storage_uri=uri,
+                idempotency_key=idempotency_key,
             )
         except UploadValidationError as error:
             rejected.append(
@@ -141,7 +152,13 @@ async def upload_resumes(
                 )
                 continue
             raise
-        accepted.append({"candidate_id": candidate["id"], "status": "uploaded"})
+        accepted.append(
+            {
+                "candidate_id": candidate["id"],
+                "job_id": candidate["job_id"],
+                "status": candidate["resume"]["status"],
+            }
+        )
         background_tasks.add_task(process_candidate, worker, repository, candidate["id"])
     return {
         "session_id": session_id,
@@ -232,8 +249,13 @@ def session_matches(
             **candidate["match"],
             "_metadata": {
                 "status": candidate["resume"].get("status"),
-                "location": candidate.get("location"),
-                "work_mode": candidate.get("work_mode"),
+                "location": (
+                    candidate.get("resume", {})
+                    .get("parsed_json", {})
+                    .get("candidate", {})
+                    .get("location")
+                ),
+                "work_mode": candidate.get("resume", {}).get("parsed_json", {}).get("work_mode"),
             },
         }
         for candidate in candidates
