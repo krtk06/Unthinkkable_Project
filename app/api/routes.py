@@ -4,11 +4,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
-from app.api.dependencies import get_repository, get_storage
+from app.api.dependencies import get_malware_scanner, get_repository, get_storage
 from app.config import get_settings
 from app.db.mongo_repository import MongoResumeRepository
 from app.ingestion.storage import LocalFileStorage
 from app.ingestion.validation import UploadValidationError, validate_upload
+from app.security.clamav import ClamAVScanner
 
 router = APIRouter(prefix="/v1", tags=["screening"])
 
@@ -62,6 +63,7 @@ async def upload_resumes(
     files: Annotated[list[UploadFile], File(...)],
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     storage: Annotated[LocalFileStorage, Depends(get_storage)],
+    scanner: Annotated[ClamAVScanner, Depends(get_malware_scanner)],
 ) -> dict[str, Any]:
     if repository.get_session(session_id) is None:
         raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404)
@@ -79,7 +81,7 @@ async def upload_resumes(
                 len(contents),
                 max_file_bytes=get_settings().max_file_bytes,
                 file_bytes=contents,
-                malware_scanner=lambda _: True,
+                malware_scanner=scanner,
             )
             checksum = hashlib.sha256(contents).hexdigest()
             uri = storage.put_original(contents, checksum, content_type)

@@ -21,6 +21,26 @@ class LLMTransport(Protocol):
         """Return a provider response for a prompt."""
 
 
+class OpenAITransport:
+    def __init__(self, api_key: str, model: str) -> None:
+        from openai import OpenAI
+
+        self.client = OpenAI(api_key=api_key)
+        self.model = model
+
+    def complete(self, prompt: str) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        content = response.choices[0].message.content
+        if content is None:
+            raise ValueError("EMPTY_LLM_RESPONSE")
+        return content
+
+
 class LLMClient(Protocol):
     def extract_resume(self, text: str) -> ExtractedResume: ...
 

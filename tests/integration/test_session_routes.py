@@ -5,7 +5,7 @@ import mongomock
 import pytest
 from httpx import ASGITransport
 
-from app.api.dependencies import get_repository
+from app.api.dependencies import get_malware_scanner, get_repository
 from app.db.mongo_repository import MongoResumeRepository
 from app.main import app
 
@@ -20,6 +20,7 @@ def repository() -> MongoResumeRepository:
 @pytest.fixture
 async def client(repository: MongoResumeRepository) -> AsyncIterator[httpx.AsyncClient]:
     app.dependency_overrides[get_repository] = lambda: repository
+    app.dependency_overrides[get_malware_scanner] = lambda: (lambda _: True)
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as value:
         yield value
