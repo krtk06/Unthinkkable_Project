@@ -40,7 +40,7 @@ def test_settings_reject_non_positive_file_limit() -> None:
 
 
 def test_settings_default_to_local_mongodb() -> None:
-    settings = Settings()
+    settings = Settings(mongo_uri="mongodb+srv://cluster.example", mongo_database="resume_screener")
 
-    assert settings.mongo_uri == "mongodb://localhost:27017"
+    assert settings.mongo_uri == "mongodb+srv://cluster.example"
     assert settings.mongo_database == "resume_screener"

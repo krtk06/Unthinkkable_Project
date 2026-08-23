@@ -59,6 +59,9 @@ class ResumeWorker:
         status = str(resume["status"])
         if status in {"parsed", "scored"}:
             return status
+        if not self.repository.claim_stage(candidate_id, ["uploaded", "failed"], "processing"):
+            current = self.repository.get_candidate(candidate_id)
+            return str(current["resume"]["status"]) if current is not None else "failed"
         self.repository.record_attempt(candidate_id, "parse", "started")
         try:
             extraction = self.extractor.extract(
@@ -115,7 +118,11 @@ class ResumeWorker:
                 result = score_match(requirements, resume, embedding_context, client)
                 if result.candidate_id != candidate_id:
                     raise ValueError("CANDIDATE_ID_MISMATCH")
-                self.repository.save_match(candidate_id, result.model_dump(mode="json"))
+                if not self.repository.save_match(candidate_id, result.model_dump(mode="json")):
+                    existing = self.repository.get_match(candidate_id)
+                    if existing is None:
+                        raise ValueError("MATCH_SAVE_FAILED")
+                    return MatchResult.model_validate(existing)
                 self.repository.record_attempt(candidate_id, "score", "completed")
                 return result
             except Exception as error:

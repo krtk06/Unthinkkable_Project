@@ -65,4 +65,27 @@ def test_mongo_repository_upserts_match_and_creates_ttl_indexes() -> None:
     assert stored_match is not None
     assert stored_match["score"] == 9
     indexes = repository.sessions.index_information()
-    assert any("expires" in str(index) for index in indexes.values())
+    assert indexes["expires_at_1"]["expireAfterSeconds"] == 0
+
+
+def test_mongo_repository_rejects_duplicate_checksum_in_session() -> None:
+    repository = make_repository()
+    session_id = repository.create_session()
+    values = {
+        "filename": "resume.txt",
+        "content_type": "text/plain",
+        "size_bytes": 10,
+        "checksum": "c" * 64,
+        "storage_uri": "local://c",
+    }
+    repository.add_resume(session_id, **values)
+
+    with pytest.raises(ValueError, match="DUPLICATE_RESUME"):
+        repository.add_resume(session_id, **values)
+
+
+def test_mongo_repository_distinguishes_missing_session() -> None:
+    repository = make_repository()
+
+    with pytest.raises(ValueError, match="SESSION_NOT_FOUND"):
+        repository.add_resume("missing", checksum="d" * 64)

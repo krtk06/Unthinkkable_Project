@@ -58,7 +58,7 @@ Each task below is complete only when its listed implementation, tests, and veri
 - Create `pyproject.toml` with Python 3.12, FastAPI, Pydantic, PyMongo, pytest, ruff, and mypy.
 - Create `app/main.py` with `/health` returning `{ "status": "ok" }`.
 - Create `app/config.py` for `MONGO_URI`, `MONGO_DATABASE`, `OBJECT_STORAGE_BUCKET`, `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `MAX_FILE_BYTES`, and `RETENTION_DAYS`.
-- Create `.env.example` without secrets and document MongoDB Atlas setup; no Docker files are required.
+- Create `.env.example` without secrets and document MongoDB Atlas setup.
 - Verify with `pytest`, `ruff check .`, and `curl http://localhost:8000/health`.
 - Commit: `chore: initialize resume screener service`.
 

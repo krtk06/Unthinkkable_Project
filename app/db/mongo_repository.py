@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import uuid4
 
-from pymongo import ASCENDING
+from pymongo import ASCENDING, ReturnDocument
 from pymongo.database import Database
 
 
@@ -24,7 +24,7 @@ class MongoResumeRepository:
 
     def _ensure_indexes(self) -> None:
         self.sessions.create_index("expires_at", expireAfterSeconds=0)
-        self.sessions.create_index([("candidates.checksum", ASCENDING)])
+        self.sessions.create_index([("candidates.resume.checksum", ASCENDING)])
         self.sessions.create_index([("candidates.id", ASCENDING)])
 
     def create_session(self) -> str:
@@ -50,12 +50,14 @@ class MongoResumeRepository:
         candidate = {
             "id": _id(),
             "session_id": session_id,
-            "resume": {**resume, "status": "uploaded"},
+            "resume": {**resume, "status": "uploaded", "attempts": [], "attempt_counters": {}},
         }
         result = self.sessions.update_one(
-            {"_id": session_id, "candidates.checksum": {"$ne": resume["checksum"]}},
+            {"_id": session_id, "candidates.resume.checksum": {"$ne": resume["checksum"]}},
             {"$push": {"candidates": candidate}, "$set": {"updated_at": datetime.now(UTC)}},
         )
+        if result.matched_count == 0 and self.get_session(session_id) is None:
+            raise ValueError("SESSION_NOT_FOUND")
         if result.modified_count != 1:
             raise ValueError("DUPLICATE_RESUME")
         return candidate
@@ -84,6 +86,13 @@ class MongoResumeRepository:
             candidate_id, {"resume.status": status, "resume.error_code": error_code}
         )
 
+    def claim_stage(self, candidate_id: str, expected: list[str], claimed: str) -> bool:
+        result = self.sessions.update_one(
+            {"candidates.id": candidate_id, "candidates.resume.status": {"$in": expected}},
+            {"$set": {"candidates.$.resume.status": claimed}},
+        )
+        return result.modified_count == 1
+
     def record_attempt(
         self,
         candidate_id: str,
@@ -95,21 +104,31 @@ class MongoResumeRepository:
         candidate = self.get_candidate(candidate_id)
         if candidate is None:
             raise ValueError("CANDIDATE_NOT_FOUND")
-        attempts = candidate.get("resume", {}).get("attempts", [])
-        attempt_number = 1 + max(
-            (item["attempt_number"] for item in attempts if item["stage"] == stage),
-            default=0,
+        counter = self.sessions.find_one_and_update(
+            {"candidates.id": candidate_id},
+            {"$inc": {"candidates.$.resume.attempt_counters." + stage: 1}},
+            projection={"candidates": {"$elemMatch": {"id": candidate_id}}},
+            return_document=ReturnDocument.AFTER,
         )
-        attempts.append(
+        if counter is None:
+            raise ValueError("CANDIDATE_NOT_FOUND")
+        current = cast(dict[str, Any], counter["candidates"][0])
+        attempt_number = current["resume"]["attempt_counters"][stage]
+        self._update_candidate(
+            candidate_id,
             {
-                "stage": stage,
-                "status": status,
-                "attempt_number": attempt_number,
-                "error_code": error_code,
-                "created_at": datetime.now(UTC),
-            }
+                "resume.attempts": [
+                    *current["resume"].get("attempts", []),
+                    {
+                        "stage": stage,
+                        "status": status,
+                        "attempt_number": attempt_number,
+                        "error_code": error_code,
+                        "created_at": datetime.now(UTC),
+                    },
+                ]
+            },
         )
-        self._update_candidate(candidate_id, {"resume.attempts": attempts})
 
     def save_extraction(
         self,
@@ -155,8 +174,18 @@ class MongoResumeRepository:
         if result.matched_count != 1:
             raise ValueError("SESSION_NOT_FOUND")
 
-    def save_match(self, candidate_id: str, match: dict[str, Any]) -> None:
-        self._update_candidate(candidate_id, {"match": match, "resume.status": "scored"})
+    def save_match(self, candidate_id: str, match: dict[str, Any]) -> bool:
+        updated = self.sessions.update_one(
+            {"candidates.id": candidate_id, "candidates.match": {"$exists": True}},
+            {"$set": {"candidates.$.match": match, "candidates.$.resume.status": "scored"}},
+        )
+        if updated.modified_count == 1:
+            return True
+        result = self.sessions.update_one(
+            {"candidates.id": candidate_id, "candidates.match": {"$exists": False}},
+            {"$set": {"candidates.$.match": match, "candidates.$.resume.status": "scored"}},
+        )
+        return result.modified_count == 1
 
     def get_match(self, candidate_id: str) -> dict[str, Any] | None:
         candidate = self.get_candidate(candidate_id)
