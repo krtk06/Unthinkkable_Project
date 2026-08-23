@@ -57,6 +57,30 @@ Uploads are accepted asynchronously at the API boundary, persisted as Atlas jobs
 
 Original resume files use the local filesystem adapter in development. The persistence layer stores session documents with embedded job descriptions, candidates, processing attempts, extraction provenance, embeddings, and match results. OpenAI calls use JSON mode with versioned prompts under `prompts/`; ClamAV scanning fails closed when the service is unavailable or rejects a stream.
 
+## Dashboard
+
+An optional Next.js review dashboard lives in `web/`. It covers session setup, drag-and-drop resume uploads with client-side validation, processing status polling, the ranked shortlist with threshold/top-N controls and filters, a candidate detail view with parsed fields, score breakdown, evidence quotes, and uncertainty notes, plus JSON/CSV export. Scores render as a 10-segment rubric gauge whose colors match the PRD score bands, and every screen labels AI output as decision support.
+
+Run it against a local API:
+
+```bash
+cd web
+npm install
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+# open http://localhost:3000
+```
+
+Checks:
+
+```bash
+cd web
+npm test            # component/unit tests (vitest)
+npm run test:e2e    # Playwright flows on desktop and mobile viewports
+npx tsc --noEmit    # type check
+```
+
+The e2e suite mocks `/v1/*` responses, so it runs without Atlas, OpenAI, or ClamAV.
+
 ## Privacy
 
 Use synthetic or licensed resume fixtures only. Candidate files and parsed PII must not be logged or committed. Configure Atlas encryption, least-privilege users, IP restrictions, and an appropriate retention policy before processing real candidate data.

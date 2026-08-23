@@ -28,7 +28,7 @@ export default function ScoreGauge({ score, large = false, showLabel = false }: 
   const bandClass = styles[`band${band.key.charAt(0).toUpperCase()}${band.key.slice(1)}`];
 
   return (
-    <span className="srWrap" title={`Score ${clamped}/10 — ${band.label}`}>
+    <span className={styles.wrap} title={`Score ${clamped}/10 — ${band.label}`}>
       <span className={`${styles.gauge} ${large ? styles.gaugeLarge : ""}`} aria-hidden="true">
         {Array.from({ length: 10 }, (_, index) => (
           <span

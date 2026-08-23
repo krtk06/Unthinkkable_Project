@@ -60,7 +60,9 @@ export default function HomePage() {
       if (!sessionId || cancelled) return;
       try {
         const nextStatus = await api.getSessionStatus(sessionId);
-        setStatus(nextStatus);
+        setStatus((current) =>
+          current && JSON.stringify(current) === JSON.stringify(nextStatus) ? current : nextStatus
+        );
         const pending = Object.entries(nextStatus.counts).some(
           ([stage, count]) => count > 0 && !["scored", "failed"].includes(stage)
         );
