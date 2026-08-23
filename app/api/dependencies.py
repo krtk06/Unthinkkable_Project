@@ -5,8 +5,10 @@ from app.config import Settings, get_settings
 from app.db.client import create_mongo_client, get_database
 from app.db.mongo_repository import MongoResumeRepository
 from app.ingestion.storage import LocalFileStorage
+from app.ingestion.text_extract import ExtractionResult, extract_text
 from app.llm.client import OpenAITransport, StructuredLLMClient
 from app.security.clamav import ClamAVScanner
+from app.workers.tasks import ResumeWorker
 
 
 @lru_cache(maxsize=1)
@@ -36,5 +38,24 @@ def get_llm_client() -> StructuredLLMClient:
         raise RuntimeError("OPENAI_CONFIGURATION_REQUIRED")
     return StructuredLLMClient(
         OpenAITransport(settings.llm_api_key, settings.llm_model),
+        prompt_version="v1",
+    )
+
+
+class DefaultExtractor:
+    def extract(self, file_bytes: bytes, content_type: str) -> ExtractionResult:
+        return extract_text(file_bytes, content_type)
+
+
+@lru_cache(maxsize=1)
+def get_worker() -> ResumeWorker:
+    settings = get_settings()
+    return ResumeWorker(
+        get_repository(),
+        get_storage(),
+        DefaultExtractor(),
+        get_llm_client(),
+        provider="openai",
+        model=settings.llm_model,
         prompt_version="v1",
     )

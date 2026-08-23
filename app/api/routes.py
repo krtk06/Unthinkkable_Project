@@ -1,15 +1,25 @@
 import hashlib
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
-from app.api.dependencies import get_malware_scanner, get_repository, get_storage
+from app.api.dependencies import (
+    get_llm_client,
+    get_malware_scanner,
+    get_repository,
+    get_storage,
+    get_worker,
+)
 from app.config import get_settings
 from app.db.mongo_repository import MongoResumeRepository
+from app.domain.job import JobRequirements
 from app.ingestion.storage import LocalFileStorage
 from app.ingestion.validation import UploadValidationError, validate_upload
+from app.llm.client import LLMClient
+from app.matching.scoring import ScoringClient
 from app.security.clamav import ClamAVScanner
+from app.workers.tasks import ResumeWorker
 
 router = APIRouter(prefix="/v1", tags=["screening"])
 
@@ -33,11 +43,15 @@ def api_error(code: str, message: str, http_status: int) -> HTTPException:
 def create_session(
     request: CreateSessionRequest,
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
 ) -> dict[str, str]:
     session_id = repository.create_session()
     if request.job_description:
+        normalized = request.normalized_requirements
+        if normalized is None:
+            normalized = llm_client.extract_job(request.job_description).model_dump(mode="json")
         repository.save_job_description(
-            session_id, request.job_description, request.normalized_requirements or {}
+            session_id, request.job_description, normalized
         )
     return {"session_id": session_id}
 
@@ -47,9 +61,13 @@ def save_job_description(
     session_id: str,
     request: JobDescriptionRequest,
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
 ) -> dict[str, str]:
     try:
-        repository.save_job_description(session_id, request.text, {})
+        normalized = llm_client.extract_job(request.text)
+        repository.save_job_description(
+            session_id, request.text, normalized.model_dump(mode="json")
+        )
     except ValueError as error:
         if str(error) == "SESSION_NOT_FOUND":
             raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404) from error
@@ -64,6 +82,8 @@ async def upload_resumes(
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     storage: Annotated[LocalFileStorage, Depends(get_storage)],
     scanner: Annotated[ClamAVScanner, Depends(get_malware_scanner)],
+    background_tasks: BackgroundTasks,
+    worker: Annotated[ResumeWorker, Depends(get_worker)],
 ) -> dict[str, Any]:
     if repository.get_session(session_id) is None:
         raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404)
@@ -118,12 +138,33 @@ async def upload_resumes(
                 continue
             raise
         accepted.append({"candidate_id": candidate["id"], "status": "uploaded"})
+        background_tasks.add_task(process_candidate, worker, repository, candidate["id"])
     return {
         "session_id": session_id,
         "accepted": len(accepted),
         "rejected": len(rejected),
         "files": [*accepted, *rejected],
     }
+
+
+def process_candidate(
+    worker: ResumeWorker, repository: MongoResumeRepository, candidate_id: str
+) -> None:
+    status = worker.process_resume(candidate_id)
+    if status != "parsed":
+        return
+    candidate = repository.get_candidate(candidate_id)
+    if candidate is None:
+        return
+    session = repository.get_session(candidate["session_id"])
+    normalized = ((session or {}).get("job_description") or {}).get("normalized_json")
+    if not normalized:
+        return
+    worker.score_candidate(
+        candidate_id,
+        JobRequirements.model_validate(normalized),
+        cast(ScoringClient, worker.parser),
+    )
 
 
 @router.get("/sessions/{session_id}/status")
