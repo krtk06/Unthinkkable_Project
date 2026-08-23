@@ -1,6 +1,23 @@
+"use client";
+
+import { motion, type Variants } from "framer-motion";
 import type { Match } from "@/lib/types";
+import { usePrefersReducedMotion } from "@/lib/hooks";
 import ScoreGauge, { formatCoverage } from "./ScoreGauge";
 import styles from "./MatchTable.module.css";
+
+const staggerContainer: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.04 },
+  },
+};
+
+const rowVariants: Variants = {
+  hidden: { opacity: 0, x: -8 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.3, ease: "easeOut" } },
+};
 
 interface MatchTableProps {
   matches: Match[];
@@ -17,6 +34,8 @@ export default function MatchTable({
   selectedCandidateId,
   onSelect,
 }: MatchTableProps) {
+  const prefersReduced = usePrefersReducedMotion();
+
   if (loading) {
     return (
       <p className={styles.loading} role="status">
@@ -39,7 +58,12 @@ export default function MatchTable({
   }
 
   return (
-    <table className={styles.table}>
+    <motion.table
+      className={styles.table}
+      variants={prefersReduced ? undefined : staggerContainer}
+      initial={prefersReduced ? undefined : "hidden"}
+      animate={prefersReduced ? undefined : "visible"}
+    >
       <caption className="visuallyHidden">
         Ranked candidates by score descending, then required coverage
       </caption>
@@ -65,8 +89,9 @@ export default function MatchTable({
       </thead>
       <tbody>
         {matches.map((match, index) => (
-          <tr
+          <motion.tr
             key={match.candidate_id}
+            variants={prefersReduced ? undefined : rowVariants}
             style={
               match.candidate_id === selectedCandidateId ? { background: "var(--surface)" } : undefined
             }
@@ -88,9 +113,9 @@ export default function MatchTable({
               </button>
             </td>
             <td>{match.strengths[0] ?? "—"}</td>
-          </tr>
+          </motion.tr>
         ))}
       </tbody>
-    </table>
+    </motion.table>
   );
 }

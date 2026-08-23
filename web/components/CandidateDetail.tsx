@@ -1,10 +1,18 @@
 "use client";
 
+import { motion, type Variants } from "framer-motion";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { usePrefersReducedMotion } from "@/lib/hooks";
 import type { CandidateDetail as CandidateDetailData, Match } from "@/lib/types";
 import ScoreGauge, { formatCoverage } from "./ScoreGauge";
 import styles from "./CandidateDetail.module.css";
+
+const panelVariants: Variants = {
+  hidden: { opacity: 0, x: 32 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.3, ease: "easeOut" } },
+  exit: { opacity: 0, x: 32, transition: { duration: 0.2, ease: "easeIn" } },
+};
 
 const TABS = ["Parsed", "Score", "Evidence", "Uncertainty", "File"] as const;
 type Tab = (typeof TABS)[number];
@@ -18,6 +26,7 @@ export default function CandidateDetail({ candidateId, onClose }: CandidateDetai
   const [detail, setDetail] = useState<CandidateDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("Score");
+  const prefersReduced = usePrefersReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +52,15 @@ export default function CandidateDetail({ candidateId, onClose }: CandidateDetai
   const parsed = detail?.resume.parsed_json ?? null;
 
   return (
-    <div className={styles.panel} role="region" aria-label={`Candidate ${candidateId} details`}>
+    <motion.div
+      className={styles.panel}
+      role="region"
+      aria-label={`Candidate ${candidateId} details`}
+      variants={prefersReduced ? undefined : panelVariants}
+      initial={prefersReduced ? undefined : "hidden"}
+      animate={prefersReduced ? undefined : "visible"}
+      exit={prefersReduced ? undefined : "exit"}
+    >
       <div className={styles.panelHeader}>
         <h2 style={{ margin: 0, fontSize: 16 }}>
           Candidate <code>{candidateId}</code>
@@ -167,7 +184,7 @@ export default function CandidateDetail({ candidateId, onClose }: CandidateDetai
               {match.evidence.map((item) => (
                 <li key={`${item.source}-${item.claim}`} className={styles.evidenceItem}>
                   <strong>{item.claim}</strong>
-                  <blockquote className={styles.quote}>“{item.quote}”</blockquote>
+                  <blockquote className={styles.quote}>"{item.quote}"</blockquote>
                   <span className={styles.source}>{item.source}</span>
                 </li>
               ))}
@@ -204,6 +221,6 @@ export default function CandidateDetail({ candidateId, onClose }: CandidateDetai
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

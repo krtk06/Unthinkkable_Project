@@ -1,10 +1,17 @@
 "use client";
 
+import { motion, type Variants } from "framer-motion";
 import { useCallback, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { usePrefersReducedMotion } from "@/lib/hooks";
 import { validateBatch, type FileRejection } from "@/lib/validation";
 import type { UploadResult } from "@/lib/types";
 import styles from "./Uploader.module.css";
+
+const dropzoneVariants: Variants = {
+  idle: { scale: 1 },
+  dragActive: { scale: 1.02, transition: { duration: 0.2, ease: "easeOut" } },
+};
 
 interface UploaderProps {
   sessionId: string | null;
@@ -21,6 +28,7 @@ export default function Uploader({ sessionId, onUploaded }: UploaderProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
+  const prefersReduced = usePrefersReducedMotion();
 
   const addFiles = useCallback((incoming: File[]) => {
     if (incoming.length === 0) return;
@@ -62,8 +70,10 @@ export default function Uploader({ sessionId, onUploaded }: UploaderProps) {
       <h2 className="visuallyHidden" id="uploader-title">
         Resume upload
       </h2>
-      <div
+      <motion.div
         className={`${styles.dropzone} ${dragActive ? styles.dropzoneActive : ""}`}
+        variants={prefersReduced ? undefined : dropzoneVariants}
+        animate={prefersReduced ? undefined : dragActive ? "dragActive" : "idle"}
         onDragOver={(event) => {
           event.preventDefault();
           setDragActive(true);
@@ -93,7 +103,7 @@ export default function Uploader({ sessionId, onUploaded }: UploaderProps) {
           }}
         />
         <p>PDF, DOCX, or UTF-8 text. Up to 10 MB per file and 100 per batch.</p>
-      </div>
+      </motion.div>
 
       {(pending.length > 0 || rejections.length > 0) && (
         <>
