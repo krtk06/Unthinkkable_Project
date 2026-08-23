@@ -120,8 +120,10 @@ export default function JDFileUploader({
           }}
           role="button"
           tabIndex={0}
-          aria-label="Drop a job description file or click to browse"
         >
+          <label htmlFor={inputId} className="visuallyHidden">
+            Drop a job description file or click to browse
+          </label>
           <input
             ref={inputRef}
             id={inputId}
