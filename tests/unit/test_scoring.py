@@ -3,6 +3,7 @@ import pytest
 from app.domain.job import JobRequirements
 from app.domain.match import MatchResult, ModelMetadata
 from app.domain.resume import ExtractedResume
+from app.llm.client import LLMError
 from app.matching.scoring import score_candidate
 
 
@@ -64,7 +65,11 @@ def test_score_candidate_returns_validated_match() -> None:
 
 
 def test_score_candidate_retries_transient_provider_failures() -> None:
-    client = FakeScoringClient([TimeoutError(), TimeoutError(), make_result()])
+    client = FakeScoringClient([
+            LLMError('API_TIMEOUT', 'timeout', retryable=True),
+            LLMError('API_TIMEOUT', 'timeout', retryable=True),
+            make_result(),
+        ])
     sleeps: list[float] = []
 
     result = score_candidate(
@@ -82,7 +87,11 @@ def test_score_candidate_retries_transient_provider_failures() -> None:
 
 
 def test_score_candidate_raises_after_three_provider_failures() -> None:
-    client = FakeScoringClient([TimeoutError(), TimeoutError(), TimeoutError()])
+    client = FakeScoringClient([
+            LLMError('API_TIMEOUT', 'timeout', retryable=True),
+            LLMError('API_TIMEOUT', 'timeout', retryable=True),
+            LLMError('API_TIMEOUT', 'timeout', retryable=True),
+        ])
 
-    with pytest.raises(TimeoutError):
+    with pytest.raises(LLMError):
         score_candidate(JobRequirements(title="Engineer"), make_resume(), "context", client)

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     clamav_port: int = Field(default=3310, ge=1, le=65535)
     max_file_bytes: int = Field(default=10 * 1024 * 1024, gt=0, le=10 * 1024 * 1024)
     retention_days: int = Field(default=30, ge=0, le=365)
+    llm_timeout: float = Field(default=30.0, gt=0, le=120.0)
 
 
 @lru_cache(maxsize=1)

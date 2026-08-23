@@ -4,6 +4,7 @@ from typing import Protocol, TypeVar
 
 from pydantic import BaseModel
 
+from app.config import get_settings
 from app.domain.job import JobRequirements
 from app.domain.match import MatchResult
 from app.domain.resume import ExtractedResume
@@ -12,6 +13,16 @@ from app.llm.validation import (
     parse_structured_output,
     validate_match_evidence,
 )
+
+
+class LLMError(Exception):
+    """Base class for retryable LLM provider errors."""
+
+    def __init__(self, code: str, message: str, *, retryable: bool = True) -> None:
+        super().__init__(message)
+        self.code = code
+        self.retryable = retryable
+
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -25,16 +36,22 @@ class OpenAITransport:
     def __init__(self, api_key: str, model: str) -> None:
         from openai import OpenAI
 
-        self.client = OpenAI(api_key=api_key)
+        settings = get_settings()
+        self.client = OpenAI(api_key=api_key, timeout=settings.llm_timeout)
         self.model = model
 
     def complete(self, prompt: str) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            temperature=0,
-            response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": prompt}],
-        )
+        from openai import APIConnectionError, APITimeoutError, RateLimitError
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0,
+                response_format={"type": "json_object"},
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except (APIConnectionError, APITimeoutError, RateLimitError) as error:
+            raise LLMError(type(error).__name__, str(error)) from error
         content = response.choices[0].message.content
         if content is None:
             raise ValueError("EMPTY_LLM_RESPONSE")

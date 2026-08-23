@@ -5,6 +5,7 @@ from typing import Protocol
 from app.domain.job import JobRequirements
 from app.domain.match import MatchResult
 from app.domain.resume import ExtractedResume
+from app.llm.client import LLMError
 from app.llm.validation import validate_match_evidence
 
 
@@ -29,8 +30,8 @@ def score_candidate(
         try:
             result = client.score_match(requirements, resume, embedding_context)
             return validate_match_evidence(result, resume)
-        except (TimeoutError, ConnectionError):
-            if attempt == 2:
+        except LLMError as error:
+            if not error.retryable or attempt == 2:
                 raise
             wait(0.5 * (2**attempt) + add_jitter(0, 0.1))
     raise RuntimeError("unreachable")

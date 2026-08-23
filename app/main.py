@@ -4,6 +4,10 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import router as api_router
 from app.domain.resume import ExtractedResume
+from app.llm.client import LLMError
+from app.logging_redaction import install_pii_redaction
+
+install_pii_redaction()
 
 app = FastAPI(title="Smart Resume Screener", version="0.1.0")
 app.include_router(api_router)
@@ -38,6 +42,21 @@ async def runtime_error_handler(_: Request, exception: RuntimeError) -> JSONResp
                 "code": str(exception),
                 "message": "Service unavailable",
                 "details": {},
+            }
+        },
+    )
+
+
+@app.exception_handler(LLMError)
+async def llm_error_handler(_: Request, exception: LLMError) -> JSONResponse:
+    status = 503 if exception.retryable else 500
+    return JSONResponse(
+        status_code=status,
+        content={
+            "error": {
+                "code": exception.code,
+                "message": str(exception),
+                "details": {"retryable": exception.retryable},
             }
         },
     )
