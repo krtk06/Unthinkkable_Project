@@ -131,6 +131,7 @@ class ResumeWorker:
                 self.repository.record_attempt(
                     candidate_id, "score", "failed", error_code=type(error).__name__
                 )
+                self.repository.update_stage(candidate_id, "parsed", type(error).__name__)
                 raise
 
 

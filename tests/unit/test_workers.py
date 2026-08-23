@@ -66,6 +66,16 @@ class FakeScoringClient:
         )
 
 
+class FailingScoringClient:
+    def score_match(
+        self,
+        requirements: JobRequirements,
+        resume: ExtractedResume,
+        embedding_context: str,
+    ) -> MatchResult:
+        raise TimeoutError("provider unavailable")
+
+
 def make_worker() -> tuple[MongoResumeRepository, ResumeWorker, list[str]]:
     repository = MongoResumeRepository(mongomock.MongoClient()["resume_screener"])
     session_id = repository.create_session()
@@ -125,3 +135,21 @@ def test_local_task_queue_defers_and_runs_work() -> None:
     assert completed == []
     queue.run_next()
     assert completed == ["done"]
+
+
+def test_failed_scoring_returns_candidate_to_retryable_state() -> None:
+    repository, worker, candidate_ids = make_worker()
+    worker.process_resume(candidate_ids[0])
+
+    try:
+        worker.score_candidate(
+            candidate_ids[0], JobRequirements(title="Engineer"), FailingScoringClient()
+        )
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("provider failure should be raised")
+
+    candidate = repository.get_candidate(candidate_ids[0])
+    assert candidate is not None
+    assert candidate["resume"]["status"] == "parsed"
