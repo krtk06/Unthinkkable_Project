@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CandidateDetail from "@/components/CandidateDetail";
 import FilterBar, { DEFAULT_FILTERS, type FilterState } from "@/components/FilterBar";
-import JobDescriptionForm from "@/components/JobDescriptionForm";
+import JDFileUploader from "@/components/JDFileUploader";
 import MatchTable from "@/components/MatchTable";
 import StatusStrip from "@/components/StatusStrip";
 import Uploader from "@/components/Uploader";
 import { api } from "@/lib/api";
 import { exportCsv, exportJson } from "@/lib/export";
-import type { Match, SessionStatus, UploadResult } from "@/lib/types";
+import type { Match, NormalizedRequirements, SessionStatus, UploadResult } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -34,6 +34,7 @@ export default function HomePage() {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const [normalized, setNormalized] = useState<NormalizedRequirements | null>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshMatches = useCallback(async () => {
@@ -102,6 +103,7 @@ export default function HomePage() {
       setMatches([]);
       setSelectedCandidateId(null);
       setErrorBanner(null);
+      setNormalized(null);
     } catch (err) {
       setErrorBanner(err instanceof Error ? err.message : "Could not delete the session.");
     }
@@ -125,7 +127,11 @@ export default function HomePage() {
 
       <div className="grid gap-8 items-start lg:grid-cols-[360px_1fr]">
         <aside className="flex flex-col gap-5 lg:sticky lg:top-6">
-          <JobDescriptionForm sessionId={sessionId} onSessionCreated={handleSessionCreated} />
+          <JDFileUploader
+            sessionId={sessionId}
+            onSessionCreated={handleSessionCreated}
+            onNormalized={setNormalized}
+          />
           <Uploader sessionId={sessionId} onUploaded={handleUploaded} />
         </aside>
 
@@ -133,6 +139,23 @@ export default function HomePage() {
           {errorBanner && (
             <div className="px-4 py-3 rounded-lg bg-error/10 border border-error text-error text-sm" role="alert">
               {errorBanner}
+            </div>
+          )}
+
+          {normalized && (
+            <div className="glass p-4 space-y-2">
+              {normalized.title && (
+                <p className="font-data font-medium text-text text-sm">{normalized.title}</p>
+              )}
+              <p className="text-sm text-text-secondary">
+                Required: {normalized.required.map((r) => r.name).join(", ") || "none stated"} ·{" "}
+                Preferred: {normalized.preferred.map((r) => r.name).join(", ") || "none stated"}
+              </p>
+              {normalized.ambiguities.length > 0 && (
+                <p className="text-xs text-warning">
+                  Ambiguous items were treated as preferred — review before scoring.
+                </p>
+              )}
             </div>
           )}
 
