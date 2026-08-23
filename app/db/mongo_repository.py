@@ -204,5 +204,11 @@ class MongoResumeRepository:
             return None
         return candidate.get("match")
 
+    def list_candidates(self, session_id: str) -> list[dict[str, Any]]:
+        session = self.get_session(session_id)
+        if session is None:
+            raise ValueError("SESSION_NOT_FOUND")
+        return cast(list[dict[str, Any]], session.get("candidates", []))
+
     def delete_session(self, session_id: str) -> None:
         self.sessions.delete_one({"_id": session_id})

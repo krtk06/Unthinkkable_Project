@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     mongo_uri: str = "mongodb+srv://cluster.example"
     mongo_database: str = "resume_screener"
     object_storage_bucket: str = "resume-files"
+    local_storage_root: str = ".data/resumes"
     llm_provider: str = "disabled"
     llm_model: str = ""
     llm_api_key: str | None = Field(default=None, repr=False)
