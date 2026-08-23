@@ -114,6 +114,10 @@ def session_matches(
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     threshold: int | None = None,
     top_n: int | None = None,
+    min_score: int | None = None,
+    max_score: int | None = None,
+    cursor: str | None = None,
+    limit: int = 50,
 ) -> dict[str, Any]:
     try:
         candidates = repository.list_candidates(session_id)
@@ -124,10 +128,20 @@ def session_matches(
     matches = [candidate["match"] for candidate in candidates if candidate.get("match")]
     if threshold is not None:
         matches = [match for match in matches if match.get("score", 0) >= threshold]
+    if min_score is not None:
+        matches = [match for match in matches if match.get("score", 0) >= min_score]
+    if max_score is not None:
+        matches = [match for match in matches if match.get("score", 0) <= max_score]
     matches.sort(key=lambda match: (-match.get("score", 0), match["candidate_id"]))
     if top_n is not None:
         matches = matches[:top_n]
-    return {"session_id": session_id, "matches": matches}
+    if limit < 1 or limit > 100:
+        raise api_error("INVALID_LIMIT", "limit must be between 1 and 100", 400)
+    if cursor is not None:
+        matches = [match for match in matches if match["candidate_id"] > cursor]
+    page = matches[:limit]
+    next_cursor = page[-1]["candidate_id"] if len(matches) > limit else None
+    return {"session_id": session_id, "matches": page, "next_cursor": next_cursor}
 
 
 @router.get("/candidates/{candidate_id}")

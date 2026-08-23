@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.api.routes import router as api_router
@@ -9,7 +9,7 @@ app.include_router(api_router)
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(_, exception: HTTPException) -> JSONResponse:
+async def http_exception_handler(_: Request, exception: HTTPException) -> JSONResponse:
     detail = exception.detail
     return JSONResponse(status_code=exception.status_code, content=detail)
 

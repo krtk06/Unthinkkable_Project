@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+
 import httpx
 import mongomock
 import pytest
@@ -14,7 +16,7 @@ def repository() -> MongoResumeRepository:
 
 
 @pytest.fixture
-async def client(repository: MongoResumeRepository):
+async def client(repository: MongoResumeRepository) -> AsyncIterator[httpx.AsyncClient]:
     app.dependency_overrides[get_repository] = lambda: repository
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as value:
@@ -75,3 +77,30 @@ async def test_status_detail_and_delete_session(client: httpx.AsyncClient) -> No
     assert detail.json()["candidate_id"] == candidate_id
     assert (await client.delete(f"/v1/sessions/{session_id}")).status_code == 204
     assert (await client.get(f"/v1/sessions/{session_id}/status")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_matches_support_score_filters_and_cursor_pagination(
+    client: httpx.AsyncClient,
+    repository: MongoResumeRepository,
+) -> None:
+    session_id = (await client.post("/v1/sessions", json={})).json()["session_id"]
+    candidate = repository.add_resume(
+        session_id,
+        filename="resume.txt",
+        content_type="text/plain",
+        size_bytes=4,
+        checksum="a" * 64,
+        storage_uri="local://a",
+    )
+    repository.save_match(
+        candidate["id"],
+        {"candidate_id": candidate["id"], "score": 8},
+    )
+
+    response = await client.get(
+        f"/v1/sessions/{session_id}/matches", params={"min_score": 7, "limit": 1}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["matches"][0]["score"] == 8
