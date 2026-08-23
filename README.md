@@ -84,3 +84,90 @@ The e2e suite mocks `/v1/*` responses, so it runs without Atlas, OpenAI, or Clam
 ## Privacy
 
 Use synthetic or licensed resume fixtures only. Candidate files and parsed PII must not be logged or committed. Configure Atlas encryption, least-privilege users, IP restrictions, and an appropriate retention policy before processing real candidate data.
+
+## Evaluation
+
+Run the extraction and matching evaluation harness (offline, no provider required):
+
+```bash
+.venv/bin/python -m tests.evaluation.run --threshold 7
+```
+
+The harness measures:
+- Field-level precision/recall/F1 for name, email, skills, and experience companies
+- Score distance from two-reviewer consensus (mean absolute distance, max distance, within-1-point rate)
+- Shortlist false-positive/negative rates at the configured threshold
+- Processing latency (mean and p95)
+
+Sample output on the six-resume synthetic manifest:
+
+```json
+{
+  "extraction": {
+    "name": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+    "email": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+    "skills": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+    "experience.companies": {"precision": 1.0, "recall": 1.0, "f1": 1.0}
+  },
+  "score_agreement": {
+    "mean_distance": 0.5,
+    "max_distance": 1,
+    "within_one_point_rate": 1.0
+  },
+  "shortlist": {
+    "threshold": 7,
+    "predicted_shortlist": 3,
+    "false_positive_rate": 0.0,
+    "consensus_shortlist": 3,
+    "false_negative_rate": 0.0
+  },
+  "latency": {
+    "count": 6,
+    "mean_seconds": 0.0,
+    "p95_seconds": 0.0001
+  }
+}
+```
+
+### Known Limitations
+
+- The evaluation uses a deterministic offline proxy pipeline and six synthetic resumes; it does not exercise real OCR, LLM variance, or non-English text.
+- Reviewer consensus is encoded by annotation, not independent human review.
+- The production path (OpenAI + ClamAV) must be benchmarked separately against the same metrics by swapping the fake client for `StructuredLLMClient`.
+- ClamAV fail-closed behavior means a scanner outage blocks uploads; plan for redundancy.
+- Retention cleanup must be scheduled externally (e.g., cron running `scripts/cleanup_retention.py`); TTL removes only session documents, original files are purged by the cleanup script.
+
+## Architecture
+
+```
+Client → FastAPI → Local storage + MongoDB → AtlasTaskQueue → ResumeWorker
+                                                    ↓
+                              OpenAI (JSON mode) ←┘
+                                                    ↓
+                              Scoring + Embeddings → MongoDB → API → Dashboard
+```
+
+- **API layer**: FastAPI with typed request/response models, idempotency keys, consistent error envelopes
+- **Queue**: MongoDB-backed `AtlasTaskQueue` with lease-based claims, 3-attempt retries, dead-letter marking
+- **Workers**: `ResumeWorker` runs extraction → normalization → scoring; stateless, horizontally scalable
+- **Storage**: Local filesystem for originals (dev), session documents in MongoDB with TTL indexes
+- **LLM**: OpenAI JSON mode, versioned prompts under `prompts/`, structured output validation with one repair retry
+- **Security**: ClamAV fail-closed scanning, PII redaction filter on logs, no PII committed, secrets via env
+
+## Prompts
+
+All prompts are versioned files under `prompts/` and referenced by `prompt_version` in every result:
+
+- `resume_extraction_v1.txt`: extract structured resume fields, no invention, warnings for missing data
+- `jd_extraction_v1.txt`: classify requirements as required/preferred, surface ambiguities
+- `match_scoring_v1.txt`: 1-10 rubric with evidence citations, strengths/gaps/uncertainty, max 5 evidence items
+
+## Final Verification
+
+```bash
+.venv/bin/pytest -q
+.venv/bin/ruff check .
+.venv/bin/mypy app tests scripts
+```
+
+All checks pass at HEAD `426b46b`.
