@@ -24,6 +24,29 @@ The application creates the session TTL and candidate lookup indexes when `Mongo
 .venv/bin/mypy app tests
 ```
 
+## API Demo
+
+Start the API with `.venv/bin/uvicorn app.main:app --reload`, then run the safe synthetic upload demo:
+
+```bash
+.venv/bin/python scripts/demo_api.py
+```
+
+Useful direct calls:
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/sessions \
+  -H 'content-type: application/json' \
+  -d '{"job_description":"Backend engineer with Python APIs"}'
+
+curl -X POST http://127.0.0.1:8000/v1/sessions/<session_id>/resumes \
+  -F 'files=@synthetic-resume.txt;type=text/plain'
+
+curl 'http://127.0.0.1:8000/v1/sessions/<session_id>/matches?min_score=7&limit=25'
+```
+
+Uploads are accepted asynchronously at the API boundary and return candidate IDs. Worker execution is currently injectable/local; a production deployment should connect these task functions to its managed queue and Atlas cluster.
+
 Original resume files use the local filesystem adapter in development. The persistence layer stores session documents with embedded job descriptions, candidates, processing attempts, extraction provenance, embeddings, and match results. LLM calls use the provider-neutral interfaces and versioned prompts under `prompts/`.
 
 ## Privacy

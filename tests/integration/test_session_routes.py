@@ -9,6 +9,8 @@ from app.api.dependencies import get_repository
 from app.db.mongo_repository import MongoResumeRepository
 from app.main import app
 
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
 
 @pytest.fixture
 def repository() -> MongoResumeRepository:
