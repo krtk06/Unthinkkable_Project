@@ -1,6 +1,7 @@
 """Run a safe synthetic upload demo against a running API server."""
 
 import argparse
+import time
 
 import httpx
 
@@ -23,6 +24,16 @@ def main() -> None:
         )
         upload.raise_for_status()
         print({"session_id": session_id, "upload": upload.json()})
+        for _ in range(30):
+            status = client.get(f"/v1/sessions/{session_id}/status")
+            status.raise_for_status()
+            counts = status.json().get("counts", {})
+            if counts.get("scored", 0) or counts.get("score_failed", 0):
+                break
+            time.sleep(1)
+        matches = client.get(f"/v1/sessions/{session_id}/matches?limit=25")
+        matches.raise_for_status()
+        print({"status": status.json(), "matches": matches.json()})
 
 
 if __name__ == "__main__":

@@ -44,7 +44,7 @@ def create_session(
     request: CreateSessionRequest,
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     session_id = repository.create_session()
     if request.job_description:
         normalized = request.normalized_requirements
@@ -62,7 +62,7 @@ def save_job_description(
     request: JobDescriptionRequest,
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     try:
         normalized = llm_client.extract_job(request.text)
         repository.save_job_description(
@@ -72,7 +72,11 @@ def save_job_description(
         if str(error) == "SESSION_NOT_FOUND":
             raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404) from error
         raise
-    return {"session_id": session_id, "status": "accepted"}
+    return {
+        "session_id": session_id,
+        "status": "accepted",
+        "normalized_requirements": normalized.model_dump(mode="json"),
+    }
 
 
 @router.post("/sessions/{session_id}/resumes", status_code=status.HTTP_202_ACCEPTED)
@@ -150,21 +154,24 @@ async def upload_resumes(
 def process_candidate(
     worker: ResumeWorker, repository: MongoResumeRepository, candidate_id: str
 ) -> None:
-    status = worker.process_resume(candidate_id)
-    if status != "parsed":
+    try:
+        status = worker.process_resume(candidate_id)
+        if status != "parsed":
+            return
+        candidate = repository.get_candidate(candidate_id)
+        if candidate is None:
+            return
+        session = repository.get_session(candidate["session_id"])
+        normalized = ((session or {}).get("job_description") or {}).get("normalized_json")
+        if not normalized:
+            return
+        worker.score_candidate(
+            candidate_id,
+            JobRequirements.model_validate(normalized),
+            cast(ScoringClient, worker.parser),
+        )
+    except Exception:
         return
-    candidate = repository.get_candidate(candidate_id)
-    if candidate is None:
-        return
-    session = repository.get_session(candidate["session_id"])
-    normalized = ((session or {}).get("job_description") or {}).get("normalized_json")
-    if not normalized:
-        return
-    worker.score_candidate(
-        candidate_id,
-        JobRequirements.model_validate(normalized),
-        cast(ScoringClient, worker.parser),
-    )
 
 
 @router.get("/sessions/{session_id}/status")
@@ -208,6 +215,11 @@ def session_matches(
     max_score: int | None = None,
     cursor: str | None = None,
     limit: int = 50,
+    min_required_coverage: float | None = None,
+    min_preferred_coverage: float | None = None,
+    status: str | None = None,
+    location: str | None = None,
+    work_mode: str | None = None,
 ) -> dict[str, Any]:
     try:
         candidates = repository.list_candidates(session_id)
@@ -215,14 +227,60 @@ def session_matches(
         if str(error) == "SESSION_NOT_FOUND":
             raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404) from error
         raise
-    matches = [candidate["match"] for candidate in candidates if candidate.get("match")]
+    matches = [
+        {
+            **candidate["match"],
+            "_metadata": {
+                "status": candidate["resume"].get("status"),
+                "location": candidate.get("location"),
+                "work_mode": candidate.get("work_mode"),
+            },
+        }
+        for candidate in candidates
+        if candidate.get("match")
+    ]
     if threshold is not None:
         matches = [match for match in matches if match.get("score", 0) >= threshold]
     if min_score is not None:
         matches = [match for match in matches if match.get("score", 0) >= min_score]
     if max_score is not None:
         matches = [match for match in matches if match.get("score", 0) <= max_score]
-    matches.sort(key=lambda match: (-match.get("score", 0), match["candidate_id"]))
+    matches = [
+        match
+        for match in matches
+        if min_required_coverage is None
+        or match.get("required_coverage", 0) >= min_required_coverage
+    ]
+    matches = [
+        match
+        for match in matches
+        if min_preferred_coverage is None
+        or match.get("preferred_coverage", 0) >= min_preferred_coverage
+    ]
+    matches = [
+        match
+        for match in matches
+        if status is None or match["_metadata"].get("status") == status
+    ]
+    matches = [
+        match
+        for match in matches
+        if location is None or match["_metadata"].get("location") == location
+    ]
+    matches = [
+        match
+        for match in matches
+        if work_mode is None or match["_metadata"].get("work_mode") == work_mode
+    ]
+    matches.sort(
+        key=lambda match: (
+            -match.get("score", 0),
+            -match.get("required_coverage", 0),
+            match["candidate_id"],
+        )
+    )
+    if threshold is not None and top_n is not None:
+        raise api_error("THRESHOLD_TOP_N_CONFLICT", "Choose threshold or top_n", 400)
     if top_n is not None:
         matches = matches[:top_n]
     if limit < 1 or limit > 100:
@@ -244,6 +302,8 @@ def session_matches(
     if len(matches) > limit:
         last = page[-1]
         next_cursor = f"{last['score']}:{last.get('required_coverage', 0)}:{last['candidate_id']}"
+    for match in page:
+        match.pop("_metadata", None)
     return {"session_id": session_id, "matches": page, "next_cursor": next_cursor}
 
 

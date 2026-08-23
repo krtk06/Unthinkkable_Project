@@ -211,4 +211,8 @@ class MongoResumeRepository:
         return cast(list[dict[str, Any]], session.get("candidates", []))
 
     def delete_session(self, session_id: str) -> None:
+        self.sessions.update_one(
+            {"_id": session_id},
+            {"$push": {"audit_events": {"event": "session_deleted", "at": datetime.now(UTC)}}},
+        )
         self.sessions.delete_one({"_id": session_id})

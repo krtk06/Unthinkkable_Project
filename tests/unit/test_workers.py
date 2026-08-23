@@ -152,4 +152,4 @@ def test_failed_scoring_returns_candidate_to_retryable_state() -> None:
 
     candidate = repository.get_candidate(candidate_ids[0])
     assert candidate is not None
-    assert candidate["resume"]["status"] == "parsed"
+    assert candidate["resume"]["status"] == "score_failed"

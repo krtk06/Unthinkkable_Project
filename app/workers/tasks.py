@@ -57,7 +57,7 @@ class ResumeWorker:
             raise ValueError("CANDIDATE_NOT_FOUND")
         resume = candidate["resume"]
         status = str(resume["status"])
-        if status in {"parsed", "scored"}:
+        if status in {"parsed", "scored", "score_failed"}:
             return status
         if not self.repository.claim_stage(candidate_id, ["uploaded", "failed"], "processing"):
             current = self.repository.get_candidate(candidate_id)
@@ -109,7 +109,7 @@ class ResumeWorker:
             existing_match = self.repository.get_match(candidate_id)
             if existing_match is not None:
                 return MatchResult.model_validate(existing_match)
-            if not self.repository.claim_stage(candidate_id, ["parsed"], "scoring"):
+            if not self.repository.claim_stage(candidate_id, ["parsed", "score_failed"], "scoring"):
                 raise ValueError("SCORING_IN_PROGRESS")
             parsed = candidate["resume"].get("parsed_json")
             if parsed is None:
@@ -131,7 +131,7 @@ class ResumeWorker:
                 self.repository.record_attempt(
                     candidate_id, "score", "failed", error_code=type(error).__name__
                 )
-                self.repository.update_stage(candidate_id, "parsed", type(error).__name__)
+                self.repository.update_stage(candidate_id, "score_failed", type(error).__name__)
                 raise
 
 
