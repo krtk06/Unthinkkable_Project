@@ -23,6 +23,7 @@ from app.api.dependencies import (
 from app.config import get_settings
 from app.db.mongo_repository import MongoResumeRepository
 from app.ingestion.storage import LocalFileStorage
+from app.ingestion.text_extract import extract_text
 from app.ingestion.validation import UploadValidationError, validate_upload
 from app.llm.client import LLMClient
 from app.security.clamav import ClamAVScanner
@@ -74,6 +75,54 @@ def save_job_description(
         normalized = llm_client.extract_job(request.text)
         repository.save_job_description(
             session_id, request.text, normalized.model_dump(mode="json")
+        )
+    except ValueError as error:
+        if str(error) == "SESSION_NOT_FOUND":
+            raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404) from error
+        raise
+    return {
+        "session_id": session_id,
+        "status": "accepted",
+        "normalized_requirements": normalized.model_dump(mode="json"),
+    }
+
+
+@router.post("/sessions/{session_id}/job-description/file", status_code=status.HTTP_202_ACCEPTED)
+async def upload_job_description_file(
+    session_id: str,
+    file: UploadFile,
+    repository: Annotated[MongoResumeRepository, Depends(get_repository)],
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+) -> dict[str, Any]:
+    if repository.get_session(session_id) is None:
+        raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404)
+    content_type = file.content_type or "application/octet-stream"
+    allowed_types = {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain",
+    }
+    if content_type not in allowed_types:
+        raise api_error(
+            "UNSUPPORTED_FILE_TYPE",
+            "Only PDF, DOCX, and plain text files are accepted for job descriptions",
+            400,
+        )
+    contents = await file.read()
+    if len(contents) == 0:
+        raise api_error("EMPTY_FILE", "The uploaded file is empty", 400)
+    if len(contents) > get_settings().max_file_bytes:
+        raise api_error("FILE_TOO_LARGE", "File exceeds the size limit", 400)
+    try:
+        extraction = extract_text(contents, content_type)
+    except ValueError as error:
+        raise api_error("EXTRACTION_FAILED", str(error), 400) from error
+    if not extraction.text.strip():
+        raise api_error("NO_EXTRACTABLE_TEXT", "No text could be extracted from the file", 400)
+    try:
+        normalized = llm_client.extract_job(extraction.text)
+        repository.save_job_description(
+            session_id, extraction.text, normalized.model_dump(mode="json")
         )
     except ValueError as error:
         if str(error) == "SESSION_NOT_FOUND":
