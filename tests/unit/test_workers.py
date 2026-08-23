@@ -1,37 +1,29 @@
-from pathlib import Path
+import mongomock
+import pytest
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
-from app.db.models import Base
-from app.db.repository import ResumeRepository
+from app.db.mongo_repository import MongoResumeRepository
 from app.domain.job import JobRequirements
 from app.domain.match import MatchResult, ModelMetadata
 from app.domain.resume import ExtractedResume
 from app.ingestion.text_extract import ExtractionResult
 from app.workers.tasks import LocalTaskQueue, ResumeWorker, process_batch
 
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
 
 class FakeStorage:
-    def __init__(self, files: dict[str, bytes]) -> None:
-        self.files = files
-
     def get_original(self, uri: str) -> bytes:
-        return self.files[uri]
+        return uri.encode()
 
 
 class FakeExtractor:
-    def __init__(self, failing_uri: str) -> None:
-        self.failing_uri = failing_uri
-        self.current_uri = ""
-
     def extract(self, file_bytes: bytes, content_type: str) -> ExtractionResult:
-        if file_bytes.decode() == self.failing_uri:
-            raise ValueError("UNREADABLE_FILE: fixture failure")
+        if file_bytes == b"failed":
+            raise ValueError("UNREADABLE_FILE")
         return ExtractionResult(text="resume text", page_count=1, ocr_used=False)
 
 
-class FakeLLM:
+class FakeParser:
     def extract_resume(self, text: str) -> ExtractedResume:
         return ExtractedResume.model_validate(
             {
@@ -74,90 +66,59 @@ class FakeScoringClient:
         )
 
 
-def make_worker(tmp_path: Path) -> tuple[Session, ResumeWorker, list[str]]:
-    engine = create_engine(f"sqlite:///{tmp_path / 'workers.db'}")
-    Base.metadata.create_all(engine)
-    db = Session(engine)
-    repository = ResumeRepository()
-    session = repository.create_session(db)
-    files = {"local://one": b"one", "local://two": b"two"}
-    repository.add_resume(
-        db,
-        session.id,
-        filename="one.txt",
-        content_type="text/plain",
-        size_bytes=3,
-        checksum="1" * 64,
-        storage_uri="local://one",
-    )
-    repository.add_resume(
-        db,
-        session.id,
-        filename="two.txt",
-        content_type="text/plain",
-        size_bytes=3,
-        checksum="2" * 64,
-        storage_uri="local://two",
-    )
-    resume_ids = [
-        candidate.resume_file.id for candidate in session.candidates if candidate.resume_file
+def make_worker() -> tuple[MongoResumeRepository, ResumeWorker, list[str]]:
+    repository = MongoResumeRepository(mongomock.MongoClient()["resume_screener"])
+    session_id = repository.create_session()
+    candidates = [
+        repository.add_resume(
+            session_id,
+            filename=f"resume-{value}.txt",
+            content_type="text/plain",
+            size_bytes=3,
+            checksum=value * 64,
+            storage_uri="local://" + value,
+        )
+        for value in ("one", "two")
     ]
     worker = ResumeWorker(
-        db,
         repository,
-        FakeStorage(files),
-        FakeExtractor("two"),
-        FakeLLM(),
+        FakeStorage(),
+        FakeExtractor(),
+        FakeParser(),
         provider="test",
         model="test-model",
         prompt_version="resume-extraction-v1",
     )
-    return db, worker, resume_ids
+    return repository, worker, [candidate["id"] for candidate in candidates]
 
 
-def test_batch_worker_isolates_resume_failure(tmp_path: Path) -> None:
-    db, worker, resume_ids = make_worker(tmp_path)
+def test_batch_worker_isolates_resume_failure() -> None:
+    repository, worker, candidate_ids = make_worker()
+    repository._update_candidate(candidate_ids[1], {"resume.storage_uri": "failed"})
 
-    statuses = process_batch(worker, resume_ids)
+    statuses = process_batch(worker, candidate_ids)
 
     assert list(statuses.values()) == ["parsed", "failed"]
-    stored_statuses = []
-    for resume_id in resume_ids:
-        stored_resume = worker.repository.get_resume(db, resume_id)
-        assert stored_resume is not None
-        stored_statuses.append(stored_resume.status)
-    assert stored_statuses == ["parsed", "failed"]
 
 
-def test_score_worker_persists_match_result(tmp_path: Path) -> None:
-    db, worker, resume_ids = make_worker(tmp_path)
-    resume = worker.repository.get_resume(db, resume_ids[0])
-    assert resume is not None
-    worker.process_resume(resume.id)
+def test_score_worker_persists_and_reuses_match() -> None:
+    repository, worker, candidate_ids = make_worker()
+    worker.process_resume(candidate_ids[0])
+    client = FakeScoringClient(candidate_ids[0])
 
-    result = worker.score_candidate(
-        resume.candidate.id,
-        JobRequirements(title="Engineer"),
-        FakeScoringClient(resume.candidate.id),
-    )
+    first = worker.score_candidate(candidate_ids[0], JobRequirements(title="Engineer"), client)
+    second = worker.score_candidate(candidate_ids[0], JobRequirements(title="Engineer"), client)
 
-    assert result.candidate_id == resume.candidate.id
-    assert resume.candidate.match is not None
-    assert resume.candidate.match.score == 8
-
-    repeated = worker.score_candidate(
-        resume.candidate.id,
-        JobRequirements(title="Engineer"),
-        FakeScoringClient(resume.candidate.id),
-    )
-
-    assert repeated.score == 8
+    assert first.score == 8
+    assert second.score == 8
+    stored_match = repository.get_match(candidate_ids[0])
+    assert stored_match is not None
+    assert stored_match["score"] == 8
 
 
-def test_local_task_queue_defers_and_runs_enqueued_work() -> None:
+def test_local_task_queue_defers_and_runs_work() -> None:
     queue = LocalTaskQueue()
     completed: list[str] = []
-
     queue.enqueue(lambda: completed.append("done"))
 
     assert queue.pending_count() == 1

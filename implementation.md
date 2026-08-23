@@ -42,10 +42,8 @@ prompts/
   resume_extraction_v1.txt
   jd_extraction_v1.txt
   match_scoring_v1.txt
-migrations/
 web/                      # optional dashboard
 README.md
-docker-compose.yml
 .env.example
 ```
 
@@ -59,8 +57,8 @@ Each task below is complete only when its listed implementation, tests, and veri
 
 - Create `pyproject.toml` with Python 3.12, FastAPI, Pydantic, PyMongo, pytest, ruff, and mypy.
 - Create `app/main.py` with `/health` returning `{ "status": "ok" }`.
-- Create `app/config.py` for `DATABASE_URL`, `OBJECT_STORAGE_BUCKET`, `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `MAX_FILE_BYTES`, and `RETENTION_DAYS`.
-- Create `.env.example` without secrets and `docker-compose.yml` for MongoDB and Redis.
+- Create `app/config.py` for `MONGO_URI`, `MONGO_DATABASE`, `OBJECT_STORAGE_BUCKET`, `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `MAX_FILE_BYTES`, and `RETENTION_DAYS`.
+- Create `.env.example` without secrets and document MongoDB Atlas setup; no Docker files are required.
 - Verify with `pytest`, `ruff check .`, and `curl http://localhost:8000/health`.
 - Commit: `chore: initialize resume screener service`.
 
@@ -95,13 +93,13 @@ Each task below is complete only when its listed implementation, tests, and veri
 - Verify with `pytest tests/unit/test_text_extract.py -v`.
 - Commit: `feat: extract resume text with OCR fallback`.
 
-### Task 1.3: Add database models and processing state
+### Task 1.3: Add MongoDB document repository and processing state
 
-- Create models for `screening_sessions`, `job_descriptions`, `candidates`, `resume_files`, `processing_attempts`, and `matches` in `app/db/models.py`.
-- Persist raw file URI/checksum, extracted text metadata, parsed JSONB, status, error code, model/prompt versions, and timestamps.
-- Add Alembic migration and repository methods: `create_session`, `add_resume`, `update_stage`, `save_parsed_resume`, `save_match`, `delete_session`.
-- Enforce unique `(session_id, checksum)` and foreign keys with cascading deletion for candidate-owned data.
-- Verify migration against a clean PostgreSQL container and repository integration tests.
+- Create `app/db/mongo_repository.py` with one session document containing job description, candidates, processing attempts, embeddings, and matches.
+- Persist raw file URI/checksum, extracted text metadata, parsed JSON, status, error code, model/prompt versions, and timestamps.
+- Add repository methods: `create_session`, `add_resume`, `update_stage`, `save_extraction`, `save_match`, `delete_session`.
+- Enforce session-scoped checksum uniqueness, atomic positional updates, candidate IDs, and a TTL index on `expires_at`.
+- Verify with `mongomock` unit tests and a documented Atlas connectivity smoke test.
 - Commit: `feat: persist screening sessions and processing state`.
 
 ### Task 1.4: Implement extraction prompt adapter
@@ -184,7 +182,7 @@ Each task below is complete only when its listed implementation, tests, and veri
 
 ### Task 3.3: Add README and runnable demo script
 
-- Document setup, environment variables, migrations, provider configuration, API curl examples, prompt versions, scoring caveats, retention, and test commands in `README.md`.
+- Document Atlas setup, environment variables, provider configuration, API curl examples, prompt versions, scoring caveats, retention, and test commands in `README.md`.
 - Add a safe synthetic sample session script that demonstrates upload through ranked output without committing secrets or real candidate PII.
 - Verify a new developer can run the demo from a clean checkout using the documented commands.
 - Commit: `docs: document architecture prompts and API workflow`.
@@ -231,7 +229,7 @@ Each task below is complete only when its listed implementation, tests, and veri
 
 ### Task 5.3: Finalize repository and demo
 
-- Run `pytest`, `ruff check .`, type checks, migration checks, and Playwright tests when the dashboard is included.
+- Run `pytest`, `ruff check .`, type checks, Atlas index checks, and Playwright tests when the dashboard is included.
 - Review every prompt for schema compliance, no-invention language, evidence citation, and version metadata.
 - Record a 2-3 minute demo: create session, upload several resumes, show progress/partial failure, inspect ranked score and evidence, apply filter, and delete the session.
 - Update README with measured metrics, known limitations, architecture diagram text, prompts, and demo link.

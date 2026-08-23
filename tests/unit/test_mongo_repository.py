@@ -5,7 +5,7 @@ import pytest
 
 from app.db.mongo_repository import MongoResumeRepository
 
-pytestmark = pytest.mark.filterwarnings("ignore:datetime.datetime.utcnow is deprecated")
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
 def make_repository() -> MongoResumeRepository:

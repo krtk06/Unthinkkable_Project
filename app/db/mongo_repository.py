@@ -68,6 +68,9 @@ class MongoResumeRepository:
             return None
         return cast(dict[str, Any], record["candidates"][0])
 
+    def get_resume(self, resume_id: str) -> dict[str, Any] | None:
+        return self.get_candidate(resume_id)
+
     def _update_candidate(self, candidate_id: str, update: dict[str, Any]) -> None:
         result = self.sessions.update_one(
             {"candidates.id": candidate_id},
@@ -75,6 +78,38 @@ class MongoResumeRepository:
         )
         if result.matched_count != 1:
             raise ValueError("CANDIDATE_NOT_FOUND")
+
+    def update_stage(self, candidate_id: str, status: str, error_code: str | None = None) -> None:
+        self._update_candidate(
+            candidate_id, {"resume.status": status, "resume.error_code": error_code}
+        )
+
+    def record_attempt(
+        self,
+        candidate_id: str,
+        stage: str,
+        status: str,
+        *,
+        error_code: str | None = None,
+    ) -> None:
+        candidate = self.get_candidate(candidate_id)
+        if candidate is None:
+            raise ValueError("CANDIDATE_NOT_FOUND")
+        attempts = candidate.get("resume", {}).get("attempts", [])
+        attempt_number = 1 + max(
+            (item["attempt_number"] for item in attempts if item["stage"] == stage),
+            default=0,
+        )
+        attempts.append(
+            {
+                "stage": stage,
+                "status": status,
+                "attempt_number": attempt_number,
+                "error_code": error_code,
+                "created_at": datetime.now(UTC),
+            }
+        )
+        self._update_candidate(candidate_id, {"resume.attempts": attempts})
 
     def save_extraction(
         self,
@@ -98,6 +133,11 @@ class MongoResumeRepository:
                 "resume.extraction": provenance,
                 "resume.status": "parsed",
             },
+        )
+
+    def save_embedding(self, candidate_id: str, vector: list[float], model: str) -> None:
+        self._update_candidate(
+            candidate_id, {"resume.embedding": vector, "resume.embedding_model": model}
         )
 
     def save_job_description(
