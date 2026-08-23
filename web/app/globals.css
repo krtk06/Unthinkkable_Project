@@ -1,0 +1,146 @@
+:root {
+  --ink: #1a2b32;
+  --ink-soft: #4c5f66;
+  --paper: #ffffff;
+  --surface: #f2f5f4;
+  --line: #d8e0dd;
+  --teal: #0e6e64;
+  --teal-dark: #0a544c;
+  --band-absent: #a63d33;
+  --band-limited: #bc7226;
+  --band-partial: #c9a227;
+  --band-strong: #2e7d5b;
+  --band-exceptional: #14524a;
+  --danger: #a63d33;
+  --focus-ring: #0e6e64;
+
+  --font-ui: var(--font-plex-sans), system-ui, sans-serif;
+  --font-data: var(--font-plex-mono), ui-monospace, monospace;
+
+  --radius: 4px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--teal);
+  text-decoration: underline;
+}
+
+.linkButton:disabled {
+  color: var(--ink-soft);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.primaryButton {
+  background: var(--teal);
+  color: #fff;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 500;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--teal-dark);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fieldError {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.hintText {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.disclaimer {
+  font-size: 13px;
+  color: var(--ink-soft);
+  border-left: 3px solid var(--teal);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+}
+
+.dangerButton {
+  background: var(--paper);
+  border: 1px solid var(--band-absent);
+  border-radius: var(--radius);
+  color: var(--band-absent);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 500;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: #faf0ef;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

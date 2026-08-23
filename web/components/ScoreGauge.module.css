@@ -1,0 +1,48 @@
+.band-absent {
+  color: var(--band-absent);
+}
+
+.band-limited {
+  color: var(--band-limited);
+}
+
+.band-partial {
+  color: var(--band-partial);
+}
+
+.band-strong {
+  color: var(--band-strong);
+}
+
+.band-exceptional {
+  color: var(--band-exceptional);
+}
+
+.gauge {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+}
+
+.gaugeSegment {
+  width: 7px;
+  height: 16px;
+  border-radius: 1px;
+  background: var(--line);
+}
+
+.gaugeLarge .gaugeSegment {
+  width: 14px;
+  height: 26px;
+}
+
+.scoreValue {
+  font-family: var(--font-data);
+  font-weight: 500;
+}
+
+.bandLabel {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
