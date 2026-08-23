@@ -57,8 +57,9 @@ async def test_upload_rejects_unsupported_file_and_missing_session(
         f"/v1/sessions/{session_id}/resumes",
         files={"files": ("resume.exe", b"bad", "application/octet-stream")},
     )
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "UNSUPPORTED_FILE"
+    assert response.status_code == 202
+    assert response.json()["rejected"] == 1
+    assert response.json()["files"][0]["error"]["code"] == "UNSUPPORTED_FILE"
 
 
 @pytest.mark.anyio

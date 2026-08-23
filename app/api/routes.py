@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_repository, get_storage
+from app.config import get_settings
 from app.db.mongo_repository import MongoResumeRepository
 from app.ingestion.storage import LocalFileStorage
 from app.ingestion.validation import UploadValidationError, validate_upload
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/v1", tags=["screening"])
 
 class CreateSessionRequest(BaseModel):
     job_description: str | None = None
+    normalized_requirements: dict[str, Any] | None = None
 
 
 class JobDescriptionRequest(BaseModel):
@@ -21,7 +23,9 @@ class JobDescriptionRequest(BaseModel):
 
 
 def api_error(code: str, message: str, http_status: int) -> HTTPException:
-    return HTTPException(http_status, {"error": {"code": code, "message": message}})
+    return HTTPException(
+        http_status, {"error": {"code": code, "message": message, "details": {}}}
+    )
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
@@ -31,7 +35,9 @@ def create_session(
 ) -> dict[str, str]:
     session_id = repository.create_session()
     if request.job_description:
-        repository.save_job_description(session_id, request.job_description, {})
+        repository.save_job_description(
+            session_id, request.job_description, request.normalized_requirements or {}
+        )
     return {"session_id": session_id}
 
 
@@ -41,7 +47,12 @@ def save_job_description(
     request: JobDescriptionRequest,
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
 ) -> dict[str, str]:
-    repository.save_job_description(session_id, request.text, {})
+    try:
+        repository.save_job_description(session_id, request.text, {})
+    except ValueError as error:
+        if str(error) == "SESSION_NOT_FOUND":
+            raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404) from error
+        raise
     return {"session_id": session_id, "status": "accepted"}
 
 
@@ -57,6 +68,7 @@ async def upload_resumes(
     if len(files) > 100:
         raise api_error("BATCH_TOO_LARGE", "A batch may contain at most 100 files", 400)
     accepted: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
     for file in files:
         contents = await file.read()
         content_type = file.content_type or "application/octet-stream"
@@ -65,6 +77,7 @@ async def upload_resumes(
                 file.filename or "",
                 content_type,
                 len(contents),
+                max_file_bytes=get_settings().max_file_bytes,
                 file_bytes=contents,
                 malware_scanner=lambda _: True,
             )
@@ -79,15 +92,36 @@ async def upload_resumes(
                 storage_uri=uri,
             )
         except UploadValidationError as error:
-            raise api_error(error.code, str(error), 400) from error
+            rejected.append(
+                {
+                    "filename": file.filename or "",
+                    "status": "failed",
+                    "error": {"code": error.code, "message": str(error), "details": {}},
+                }
+            )
+            continue
         except ValueError as error:
             if str(error) == "DUPLICATE_RESUME":
-                raise api_error(
-                    "DUPLICATE_RESUME", "Resume already exists in this session", 409
-                ) from error
+                rejected.append(
+                    {
+                        "filename": file.filename or "",
+                        "status": "failed",
+                        "error": {
+                            "code": "DUPLICATE_RESUME",
+                            "message": "Resume already exists in this session",
+                            "details": {},
+                        },
+                    }
+                )
+                continue
             raise
         accepted.append({"candidate_id": candidate["id"], "status": "uploaded"})
-    return {"session_id": session_id, "accepted": len(accepted), "files": accepted}
+    return {
+        "session_id": session_id,
+        "accepted": len(accepted),
+        "rejected": len(rejected),
+        "files": [*accepted, *rejected],
+    }
 
 
 @router.get("/sessions/{session_id}/status")
@@ -105,7 +139,20 @@ def session_status(
     for candidate in candidates:
         current = str(candidate["resume"]["status"])
         counts[current] = counts.get(current, 0) + 1
-    return {"session_id": session_id, "total": len(candidates), "counts": counts}
+    return {
+        "session_id": session_id,
+        "total": len(candidates),
+        "counts": counts,
+        "files": [
+            {
+                "candidate_id": candidate["id"],
+                "filename": candidate["resume"].get("filename"),
+                "status": candidate["resume"].get("status"),
+                "error_code": candidate["resume"].get("error_code"),
+            }
+            for candidate in candidates
+        ],
+    }
 
 
 @router.get("/sessions/{session_id}/matches")
@@ -138,9 +185,22 @@ def session_matches(
     if limit < 1 or limit > 100:
         raise api_error("INVALID_LIMIT", "limit must be between 1 and 100", 400)
     if cursor is not None:
-        matches = [match for match in matches if match["candidate_id"] > cursor]
+        try:
+            cursor_score, cursor_coverage, cursor_id = cursor.split(":", 2)
+            cursor_key = (-int(cursor_score), -float(cursor_coverage), cursor_id)
+        except ValueError as error:
+            raise api_error("INVALID_CURSOR", "Cursor is malformed", 400) from error
+        matches = [
+            match
+            for match in matches
+            if (-match.get("score", 0), -match.get("required_coverage", 0), match["candidate_id"])
+            > cursor_key
+        ]
     page = matches[:limit]
-    next_cursor = page[-1]["candidate_id"] if len(matches) > limit else None
+    next_cursor = None
+    if len(matches) > limit:
+        last = page[-1]
+        next_cursor = f"{last['score']}:{last.get('required_coverage', 0)}:{last['candidate_id']}"
     return {"session_id": session_id, "matches": page, "next_cursor": next_cursor}
 
 
