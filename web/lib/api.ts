@@ -90,6 +90,22 @@ export const api = {
     });
   },
 
+  uploadJobDescriptionFile(
+    sessionId: string,
+    file: File
+  ): Promise<{
+    session_id: string;
+    status: string;
+    normalized_requirements: NormalizedRequirements;
+  }> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request(`/v1/sessions/${sessionId}/job-description/file`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
   uploadResumes(
     sessionId: string,
     files: File[],
