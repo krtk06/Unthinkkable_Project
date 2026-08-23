@@ -1,7 +1,7 @@
 from collections import deque
 from collections.abc import Callable, Mapping
 from threading import Lock
-from typing import Protocol
+from typing import Protocol, cast
 
 from app.db.mongo_repository import MongoResumeRepository
 from app.domain.job import JobRequirements
@@ -11,6 +11,7 @@ from app.ingestion.text_extract import ExtractionResult
 from app.matching.embeddings import EmbeddingClient, embed_candidate
 from app.matching.scoring import ScoringClient
 from app.matching.scoring import score_candidate as score_match
+from app.workers.queue import AtlasTaskQueue
 
 _score_lock = Lock()
 
@@ -175,3 +176,33 @@ class LocalTaskQueue:
 
     def pending_count(self) -> int:
         return len(self._pending)
+
+
+def process_candidate_job(worker: ResumeWorker, candidate_id: str) -> None:
+    if worker.process_resume(candidate_id) != "parsed":
+        return
+    candidate = worker.repository.get_candidate(candidate_id)
+    if candidate is None:
+        return
+    session = worker.repository.get_session(candidate["session_id"])
+    normalized = ((session or {}).get("job_description") or {}).get("normalized_json")
+    if normalized:
+        worker.score_candidate(
+            candidate_id,
+            JobRequirements.model_validate(normalized),
+            cast(ScoringClient, worker.parser),
+        )
+
+
+def run_once(queue: AtlasTaskQueue, worker: ResumeWorker, worker_id: str) -> bool:
+    job = queue.claim(worker_id)
+    if job is None:
+        return False
+    try:
+        if job["task"] != "process_candidate":
+            raise ValueError("UNKNOWN_TASK")
+        process_candidate_job(worker, job["payload"]["candidate_id"])
+        queue.complete(job["_id"])
+    except Exception as error:
+        queue.fail(job["_id"], type(error).__name__)
+    return True

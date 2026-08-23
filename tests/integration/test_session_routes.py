@@ -5,10 +5,11 @@ import mongomock
 import pytest
 from httpx import ASGITransport
 
-from app.api.dependencies import get_llm_client, get_malware_scanner, get_repository, get_worker
+from app.api.dependencies import get_llm_client, get_malware_scanner, get_queue, get_repository
 from app.db.mongo_repository import MongoResumeRepository
 from app.domain.job import JobRequirements
 from app.main import app
+from app.workers.queue import AtlasTaskQueue
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
@@ -16,18 +17,6 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 class FakeAPIClient:
     def extract_job(self, text: str) -> JobRequirements:
         return JobRequirements(title="Backend engineer")
-
-
-class FakeAPIWorker:
-    parser = FakeAPIClient()
-
-    def process_resume(self, candidate_id: str) -> str:
-        return "parsed"
-
-    def score_candidate(
-        self, candidate_id: str, requirements: JobRequirements, client: object
-    ) -> object:
-        return object()
 
 
 @pytest.fixture
@@ -40,7 +29,7 @@ async def client(repository: MongoResumeRepository) -> AsyncIterator[httpx.Async
     app.dependency_overrides[get_repository] = lambda: repository
     app.dependency_overrides[get_malware_scanner] = lambda: (lambda _: True)
     app.dependency_overrides[get_llm_client] = FakeAPIClient
-    app.dependency_overrides[get_worker] = FakeAPIWorker
+    app.dependency_overrides[get_queue] = lambda: AtlasTaskQueue(repository.database)
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as value:
         yield value

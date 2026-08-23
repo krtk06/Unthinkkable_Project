@@ -8,6 +8,7 @@ from app.ingestion.storage import LocalFileStorage
 from app.ingestion.text_extract import ExtractionResult, extract_text
 from app.llm.client import OpenAITransport, StructuredLLMClient
 from app.security.clamav import ClamAVScanner
+from app.workers.queue import AtlasTaskQueue
 from app.workers.tasks import ResumeWorker
 
 
@@ -59,3 +60,9 @@ def get_worker() -> ResumeWorker:
         model=settings.llm_model,
         prompt_version="v1",
     )
+
+
+@lru_cache(maxsize=1)
+def get_queue() -> AtlasTaskQueue:
+    settings = get_settings()
+    return AtlasTaskQueue(get_database(create_mongo_client(settings), settings))

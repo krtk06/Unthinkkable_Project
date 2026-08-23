@@ -1,9 +1,9 @@
 import hashlib
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
+from uuid import uuid4
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     Header,
@@ -16,19 +16,17 @@ from pydantic import BaseModel, Field
 from app.api.dependencies import (
     get_llm_client,
     get_malware_scanner,
+    get_queue,
     get_repository,
     get_storage,
-    get_worker,
 )
 from app.config import get_settings
 from app.db.mongo_repository import MongoResumeRepository
-from app.domain.job import JobRequirements
 from app.ingestion.storage import LocalFileStorage
 from app.ingestion.validation import UploadValidationError, validate_upload
 from app.llm.client import LLMClient
-from app.matching.scoring import ScoringClient
 from app.security.clamav import ClamAVScanner
-from app.workers.tasks import ResumeWorker
+from app.workers.queue import AtlasTaskQueue
 
 router = APIRouter(prefix="/v1", tags=["screening"])
 
@@ -95,8 +93,7 @@ async def upload_resumes(
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     storage: Annotated[LocalFileStorage, Depends(get_storage)],
     scanner: Annotated[ClamAVScanner, Depends(get_malware_scanner)],
-    background_tasks: BackgroundTasks,
-    worker: Annotated[ResumeWorker, Depends(get_worker)],
+    queue: Annotated[AtlasTaskQueue, Depends(get_queue)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict[str, Any]:
     if repository.get_session(session_id) is None:
@@ -105,6 +102,7 @@ async def upload_resumes(
         raise api_error("BATCH_TOO_LARGE", "A batch may contain at most 100 files", 400)
     accepted: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
+    batch_id = uuid4().hex
     for file in files:
         contents = await file.read()
         content_type = file.content_type or "application/octet-stream"
@@ -159,36 +157,15 @@ async def upload_resumes(
                 "status": candidate["resume"]["status"],
             }
         )
-        background_tasks.add_task(process_candidate, worker, repository, candidate["id"])
+        job_id = queue.enqueue("process_candidate", {"candidate_id": candidate["id"]}, batch_id)
+        accepted[-1]["job_id"] = job_id
     return {
         "session_id": session_id,
+        "batch_id": batch_id,
         "accepted": len(accepted),
         "rejected": len(rejected),
         "files": [*accepted, *rejected],
     }
-
-
-def process_candidate(
-    worker: ResumeWorker, repository: MongoResumeRepository, candidate_id: str
-) -> None:
-    try:
-        status = worker.process_resume(candidate_id)
-        if status != "parsed":
-            return
-        candidate = repository.get_candidate(candidate_id)
-        if candidate is None:
-            return
-        session = repository.get_session(candidate["session_id"])
-        normalized = ((session or {}).get("job_description") or {}).get("normalized_json")
-        if not normalized:
-            return
-        worker.score_candidate(
-            candidate_id,
-            JobRequirements.model_validate(normalized),
-            cast(ScoringClient, worker.parser),
-        )
-    except Exception:
-        return
 
 
 @router.get("/sessions/{session_id}/status")
