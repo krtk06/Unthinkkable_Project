@@ -11,3 +11,6 @@ build/
 *.egg-info/
 coverage.xml
 htmlcov/
+DemoVideo/
+*.mp4
+*.mov
