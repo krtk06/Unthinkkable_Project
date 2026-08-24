@@ -142,3 +142,18 @@ export interface CandidateDetail {
   match?: Match | Record<string, unknown> | null;
   [key: string]: unknown;
 }
+
+export interface ParsedCandidate {
+  candidate_id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  location: string | null;
+  skills: string[];
+  experience_years: number;
+  experience: ExperienceRecord[];
+  education: EducationRecord[];
+  status: "parsed" | "scoring" | "scored" | "failed";
+  score?: number;
+  filename?: string | null;
+}

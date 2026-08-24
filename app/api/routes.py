@@ -1,5 +1,5 @@
 import hashlib
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import uuid4
 
 from fastapi import (
@@ -19,17 +19,26 @@ from app.api.dependencies import (
     get_queue,
     get_repository,
     get_storage,
+    get_worker,
 )
 from app.config import get_settings
 from app.db.mongo_repository import MongoResumeRepository
+from app.domain.job import JobRequirements
 from app.ingestion.storage import LocalFileStorage
 from app.ingestion.text_extract import extract_text
 from app.ingestion.validation import UploadValidationError, validate_upload
 from app.llm.client import LLMClient
+from app.matching.scoring import ScoringClient
+from app.security.auth import get_current_user
 from app.security.clamav import ClamAVScanner
 from app.workers.queue import AtlasTaskQueue
+from app.workers.tasks import ResumeWorker
 
-router = APIRouter(prefix="/v1", tags=["screening"])
+router = APIRouter(
+    prefix="/v1",
+    tags=["screening"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 class CreateSessionRequest(BaseModel):
@@ -45,6 +54,21 @@ def api_error(code: str, message: str, http_status: int) -> HTTPException:
     return HTTPException(
         http_status, {"error": {"code": code, "message": message, "details": {}}}
     )
+
+
+def rescore_session(
+    repository: MongoResumeRepository,
+    queue: AtlasTaskQueue,
+    session_id: str,
+) -> None:
+    repository.reset_scoring_for_session(session_id)
+    for candidate in repository.list_candidates(session_id):
+        if candidate.get("resume", {}).get("status") == "parsed":
+            queue.enqueue(
+                "process_candidate",
+                {"candidate_id": candidate["id"]},
+                session_id,
+            )
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
@@ -70,12 +94,14 @@ def save_job_description(
     request: JobDescriptionRequest,
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    queue: Annotated[AtlasTaskQueue, Depends(get_queue)],
 ) -> dict[str, Any]:
     try:
         normalized = llm_client.extract_job(request.text)
         repository.save_job_description(
             session_id, request.text, normalized.model_dump(mode="json")
         )
+        rescore_session(repository, queue, session_id)
     except ValueError as error:
         if str(error) == "SESSION_NOT_FOUND":
             raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404) from error
@@ -93,6 +119,7 @@ async def upload_job_description_file(
     file: UploadFile,
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    queue: Annotated[AtlasTaskQueue, Depends(get_queue)],
 ) -> dict[str, Any]:
     if repository.get_session(session_id) is None:
         raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404)
@@ -124,6 +151,7 @@ async def upload_job_description_file(
         repository.save_job_description(
             session_id, extraction.text, normalized.model_dump(mode="json")
         )
+        rescore_session(repository, queue, session_id)
     except ValueError as error:
         if str(error) == "SESSION_NOT_FOUND":
             raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404) from error
@@ -388,6 +416,42 @@ def candidate_detail(
     if candidate is None:
         raise api_error("CANDIDATE_NOT_FOUND", "Candidate was not found", 404)
     return {"candidate_id": candidate_id, **candidate}
+
+
+@router.post("/candidates/{candidate_id}/score", status_code=status.HTTP_202_ACCEPTED)
+def score_single_candidate(
+    candidate_id: str,
+    repository: Annotated[MongoResumeRepository, Depends(get_repository)],
+    worker: Annotated[ResumeWorker, Depends(get_worker)],
+) -> dict[str, Any]:
+    candidate = repository.get_candidate(candidate_id)
+    if candidate is None:
+        raise api_error("CANDIDATE_NOT_FOUND", "Candidate was not found", 404)
+    
+    session = repository.get_session(candidate["session_id"])
+    if session is None:
+        raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404)
+    
+    normalized = ((session or {}).get("job_description") or {}).get("normalized_json")
+    if not normalized:
+        raise api_error("NO_JOB_DESCRIPTION", "No job description available for scoring", 400)
+    
+    requirements = JobRequirements.model_validate(normalized)
+    
+    result = worker.score_candidate(
+        candidate_id=candidate_id,
+        requirements=requirements,
+        client=cast(ScoringClient, worker.parser),
+    )
+    
+    return {
+        "candidate_id": candidate_id,
+        "score": result.score,
+        "required_coverage": result.required_coverage,
+        "preferred_coverage": result.preferred_coverage,
+        "strengths": result.strengths,
+        "gaps": result.gaps,
+    }
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

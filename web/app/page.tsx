@@ -1,128 +1,159 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import CandidateDetail from "@/components/CandidateDetail";
-import FilterBar, { DEFAULT_FILTERS, type FilterState } from "@/components/FilterBar";
+import { useRouter } from "next/navigation";
+import CandidateCard from "@/components/CandidateCard";
 import JDFileUploader from "@/components/JDFileUploader";
-import MatchTable from "@/components/MatchTable";
 import StatusStrip from "@/components/StatusStrip";
 import Uploader from "@/components/Uploader";
 import { api } from "@/lib/api";
+import { clearToken, getToken } from "@/lib/auth";
 import { exportCsv, exportJson } from "@/lib/export";
-import type { Match, NormalizedRequirements, SessionStatus, UploadResult } from "@/lib/types";
+import type { NormalizedRequirements, ParsedCandidate, SessionStatus, UploadResult } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 2000;
 
-function buildQuery(filters: FilterState) {
-  return {
-    ...(filters.mode === "threshold" ? { threshold: filters.threshold } : { top_n: filters.topN }),
-    min_required_coverage: filters.minRequiredCoverage,
-    min_experience_months: filters.minExperienceMonths ?? undefined,
-    work_mode: filters.workMode || undefined,
-    location: filters.location || undefined,
-    ...(filters.requiredSkillsComplete !== "any"
-      ? { required_skills_complete: filters.requiredSkillsComplete === "true" }
-      : {}),
-  };
+function compareCandidates(a: ParsedCandidate, b: ParsedCandidate): number {
+  const aScore = a.status === "scored" ? a.score ?? 0 : -1;
+  const bScore = b.status === "scored" ? b.score ?? 0 : -1;
+  if (aScore !== bScore) return bScore - aScore;
+  return (a.name ?? "").localeCompare(b.name ?? "");
 }
 
 export default function HomePage() {
+  const router = useRouter();
+  const [authReady, setAuthReady] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [status, setStatus] = useState<SessionStatus | null>(null);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [matchesLoading, setMatchesLoading] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [normalized, setNormalized] = useState<NormalizedRequirements | null>(null);
+  const [parsedCandidates, setParsedCandidates] = useState<ParsedCandidate[]>([]);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refreshMatches = useCallback(async () => {
-    if (!sessionId) return;
-    setMatchesLoading(true);
-    try {
-      const page = await api.getMatches(sessionId, buildQuery(filters));
-      setMatches(page.matches);
-      setErrorBanner(null);
-    } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : "Could not load matches.");
-    } finally {
-      setMatchesLoading(false);
+  useEffect(() => {
+    if (!getToken()) {
+      router.replace("/login");
+    } else {
+      setAuthReady(true);
     }
-  }, [sessionId, filters]);
+  }, [router]);
+
+  const fetchParsedCandidates = useCallback(async (nextStatus: SessionStatus) => {
+    const candidates: ParsedCandidate[] = [];
+    for (const file of nextStatus.files) {
+      if (file.status === "parsed" || file.status === "scored" || file.status === "scoring" || file.status === "score_failed") {
+        try {
+          const detail = await api.getCandidate(file.candidate_id);
+          const parsed = detail.resume?.parsed_json;
+          if (parsed) {
+            const totalMonths = (parsed.experience || []).reduce(
+              (sum, exp) => sum + (exp.duration_months || 0),
+              0
+            );
+            const experienceYears = Math.round((totalMonths / 12) * 10) / 10;
+            const match = detail.match && "score" in (detail.match as Record<string, unknown>)
+              ? (detail.match as { score: number })
+              : null;
+
+            candidates.push({
+              candidate_id: file.candidate_id,
+              name: parsed.candidate?.name || null,
+              email: parsed.candidate?.contact?.email || null,
+              phone: parsed.candidate?.contact?.phone || null,
+              location: parsed.candidate?.location || null,
+              skills: parsed.skills || [],
+              experience_years: experienceYears,
+              experience: parsed.experience || [],
+              education: parsed.education || [],
+              status: file.status as ParsedCandidate["status"],
+              score: match?.score,
+              filename: file.filename,
+            });
+          }
+        } catch {
+          // Skip candidates that fail to load
+        }
+      }
+    }
+    setParsedCandidates(candidates);
+  }, []);
+
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    };
+  }, []);
+
+  const poll = useCallback(async () => {
+    if (!sessionId || !mountedRef.current) return;
+    try {
+      const nextStatus = await api.getSessionStatus(sessionId);
+      if (!mountedRef.current) return;
+      setStatus((current) =>
+        current && JSON.stringify(current) === JSON.stringify(nextStatus) ? current : nextStatus
+      );
+      await fetchParsedCandidates(nextStatus);
+      if (!mountedRef.current) return;
+      const pending = Object.entries(nextStatus.counts).some(
+        ([stage, count]) => count > 0 && !["scored", "failed"].includes(stage)
+      );
+      if (pending) {
+        pollTimer.current = setTimeout(() => void poll(), POLL_INTERVAL_MS);
+      }
+    } catch {
+      if (mountedRef.current) {
+        pollTimer.current = setTimeout(() => void poll(), POLL_INTERVAL_MS * 3);
+      }
+    }
+  }, [sessionId, fetchParsedCandidates]);
 
   useEffect(() => {
     if (!sessionId) return;
-    let cancelled = false;
-
-    async function poll() {
-      if (!sessionId || cancelled) return;
-      try {
-        const nextStatus = await api.getSessionStatus(sessionId);
-        setStatus((current) =>
-          current && JSON.stringify(current) === JSON.stringify(nextStatus) ? current : nextStatus
-        );
-        const pending = Object.entries(nextStatus.counts).some(
-          ([stage, count]) => count > 0 && !["scored", "failed"].includes(stage)
-        );
-        if (pending) {
-          pollTimer.current = setTimeout(poll, POLL_INTERVAL_MS);
-        } else {
-          void refreshMatches();
-        }
-      } catch {
-        pollTimer.current = setTimeout(poll, POLL_INTERVAL_MS * 3);
-      }
-    }
-
     void poll();
-    return () => {
-      cancelled = true;
-      if (pollTimer.current) clearTimeout(pollTimer.current);
-    };
-  }, [sessionId, refreshMatches]);
+  }, [sessionId, poll]);
 
   function handleSessionCreated(id: string) {
     setSessionId(id);
   }
 
-  function handleUploaded(result: UploadResult) {
-    setSelectedCandidateId(null);
-    void api
-      .getSessionStatus(sessionId ?? result.session_id)
-      .then((next) => setStatus(next))
-      .catch(() => undefined);
+  function handleUploaded(_result: UploadResult) {
+    setErrorBanner(null);
+    void poll();
   }
 
-  async function handleDeleteSession() {
-    if (!sessionId) return;
-    try {
-      await api.deleteSession(sessionId);
-      setSessionId(null);
-      setStatus(null);
-      setMatches([]);
-      setSelectedCandidateId(null);
-      setErrorBanner(null);
-      setNormalized(null);
-    } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : "Could not delete the session.");
-    }
+  function handleLogout() {
+    clearToken();
+    router.replace("/login");
   }
+
+  if (!authReady) {
+    return null;
+  }
+
+  const sortedCandidates = [...parsedCandidates].sort(compareCandidates);
+  const pendingCount = status
+    ? Object.entries(status.counts)
+        .filter(([stage, count]) => count > 0 && !["scored", "failed"].includes(stage))
+        .reduce((sum, [, count]) => sum + count, 0)
+    : 0;
 
   return (
     <div className="max-w-[1280px] mx-auto p-6 grid gap-8">
-      <header className="flex flex-wrap justify-between items-baseline gap-3 border-b border-border pb-4">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-text">
-            Smart Resume Screener
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Evidence-based shortlisting for one role at a time.
-          </p>
-        </div>
-        <p className="text-sm text-text-secondary border-l-2 border-accent pl-3 py-1 bg-surface rounded-r-lg">
-          AI scores are decision support. A human makes the hiring decision.
-        </p>
+      <header className="flex flex-wrap justify-between items-center gap-3 border-b border-border pb-4">
+        <h1 className="text-[22px] font-semibold tracking-tight text-text">
+          Smart Resume Screener
+        </h1>
+        <button
+          type="button"
+          className="text-sm text-text-secondary hover:text-text transition-colors"
+          onClick={handleLogout}
+        >
+          Log out
+        </button>
       </header>
 
       <div className="grid gap-8 items-start lg:grid-cols-[360px_1fr]">
@@ -131,6 +162,10 @@ export default function HomePage() {
             sessionId={sessionId}
             onSessionCreated={handleSessionCreated}
             onNormalized={setNormalized}
+            onUploaded={() => {
+              setErrorBanner(null);
+              void poll();
+            }}
           />
           <Uploader sessionId={sessionId} onUploaded={handleUploaded} />
         </aside>
@@ -159,62 +194,56 @@ export default function HomePage() {
             </div>
           )}
 
-          {status && (
-            <>
-              <StatusStrip total={status.total} counts={status.counts} />
-              <FilterBar
-                filters={filters}
-                onChange={setFilters}
-                onApply={() => void refreshMatches()}
-                busy={matchesLoading}
-              />
-              <MatchTable
-                matches={matches}
-                loading={matchesLoading}
-                hasSession={Boolean(sessionId)}
-                selectedCandidateId={selectedCandidateId}
-                onSelect={(id) => setSelectedCandidateId((current) => (current === id ? null : id))}
-              />
-              {matches.length > 0 && (
+          {status && pendingCount > 0 && (
+            <StatusStrip total={status.total} counts={status.counts} />
+          )}
+
+          {sortedCandidates.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-medium text-text">
+                Candidates {pendingCount > 0 ? `· processing ${pendingCount}…` : ""}
+              </h2>
+              <div className="space-y-2">
+                {sortedCandidates.map((candidate, index) => (
+                  <CandidateCard key={candidate.candidate_id} candidate={candidate} rank={index + 1} />
+                ))}
+              </div>
+              {sortedCandidates.some((c) => c.status === "scored") && (
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     className="px-4 py-2 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors"
-                    onClick={() => exportJson(matches, sessionId ?? "")}
+                    onClick={() => exportJson(sortedCandidates, sessionId ?? "")}
                   >
                     Export JSON
                   </button>
                   <button
                     type="button"
                     className="px-4 py-2 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors"
-                    onClick={() => exportCsv(matches)}
+                    onClick={() => exportCsv(sortedCandidates)}
                   >
                     Export CSV
                   </button>
                 </div>
               )}
-            </>
-          )}
-          {!status && !sessionId && (
-            <MatchTable matches={[]} loading={false} hasSession={false} selectedCandidateId={null} onSelect={() => undefined} />
+            </div>
           )}
 
-          {selectedCandidateId && (
-            <CandidateDetail
-              candidateId={selectedCandidateId}
-              onClose={() => setSelectedCandidateId(null)}
-            />
+          {!sessionId && (
+            <div className="px-4 py-3 rounded-lg bg-surface border border-border text-sm text-text-secondary" role="status">
+              No candidates yet. Drop a job description to start, then add resumes.
+            </div>
           )}
 
-          {sessionId && (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="px-4 py-2 rounded-lg border border-error text-error hover:bg-error/10 transition-colors font-medium"
-                onClick={() => void handleDeleteSession()}
-              >
-                Delete this session and its data
-              </button>
+          {sessionId && !normalized && (
+            <div className="px-4 py-3 rounded-lg bg-surface border border-border text-sm text-text-secondary" role="status">
+              Waiting for a job description…
+            </div>
+          )}
+
+          {sessionId && normalized && sortedCandidates.length === 0 && pendingCount === 0 && (
+            <div className="px-4 py-3 rounded-lg bg-surface border border-border text-sm text-text-secondary" role="status">
+              No resumes yet. Drop resume files on the uploader to score them against this role.
             </div>
           )}
         </main>

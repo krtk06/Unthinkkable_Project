@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 60_000,
   retries: 0,
   use: {
-    baseURL: "http://localhost:3100",
+    baseURL: "http://localhost:3000",
     trace: "on-first-retry",
   },
   projects: [
@@ -16,8 +16,8 @@ export default defineConfig({
     { name: "mobile", use: { ...devices["Pixel 7"], isMobile: false, hasTouch: false } },
   ],
   webServer: {
-    command: "npm run dev -- --port 3100",
-    url: "http://localhost:3100",
+    command: "npm run dev -- --port 3000",
+    url: "http://localhost:3000",
     reuseExistingServer: true,
     timeout: 120_000,
   },

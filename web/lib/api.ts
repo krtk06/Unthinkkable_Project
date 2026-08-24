@@ -1,6 +1,6 @@
+import { clearToken, getToken } from "./auth";
 import type {
   CandidateDetail,
-  MatchesPage,
   NormalizedRequirements,
   SessionStatus,
   UploadResult,
@@ -34,59 +34,48 @@ async function parseError(response: Response): Promise<never> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, init);
+  const token = getToken();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${BASE_URL}${path}`, { ...init, headers });
+  if (response.status === 401 && !path.startsWith("/v1/auth/login")) {
+    clearToken();
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.assign("/login");
+    }
+  }
   if (!response.ok) return parseError(response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
-export interface MatchQuery {
-  threshold?: number;
-  top_n?: number;
-  min_required_coverage?: number;
-  min_experience_months?: number;
-  work_mode?: string;
-  location?: string;
-  required_skills_complete?: boolean;
-  cursor?: string | null;
-  limit?: number;
-}
-
-function buildMatchParams(query: MatchQuery): string {
-  const params = new URLSearchParams();
-  if (query.threshold !== undefined) params.set("threshold", String(query.threshold));
-  if (query.top_n !== undefined) params.set("top_n", String(query.top_n));
-  if (query.min_required_coverage !== undefined)
-    params.set("min_required_coverage", String(query.min_required_coverage));
-  if (query.min_experience_months !== undefined)
-    params.set("min_experience_months", String(query.min_experience_months));
-  if (query.work_mode) params.set("work_mode", query.work_mode);
-  if (query.location) params.set("location", query.location);
-  if (query.required_skills_complete !== undefined)
-    params.set("required_skills_complete", String(query.required_skills_complete));
-  if (query.cursor) params.set("cursor", query.cursor);
-  params.set("limit", String(query.limit ?? 50));
-  return params.toString();
-}
-
 export const api = {
-  createSession(jobDescription?: string): Promise<{ session_id: string }> {
-    return request("/v1/sessions", {
+  login(username: string, password: string): Promise<{ access_token: string; token_type: string; username: string }> {
+    return request("/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_description: jobDescription || null }),
+      body: JSON.stringify({ username, password }),
     });
   },
 
-  saveJobDescription(sessionId: string, text: string): Promise<{
-    session_id: string;
-    status: string;
-    normalized_requirements: NormalizedRequirements;
-  }> {
-    return request(`/v1/sessions/${sessionId}/job-description`, {
+  signup(username: string, email: string, password: string): Promise<{ access_token: string; token_type: string; username: string }> {
+    return request("/v1/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ username, email, password }),
+    });
+  },
+
+  me(): Promise<{ username: string }> {
+    return request("/v1/auth/me");
+  },
+
+  createSession(): Promise<{ session_id: string }> {
+    return request("/v1/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_description: null }),
     });
   },
 
@@ -131,15 +120,7 @@ export const api = {
     return request(`/v1/sessions/${sessionId}/status`);
   },
 
-  getMatches(sessionId: string, query: MatchQuery = {}): Promise<MatchesPage> {
-    return request(`/v1/sessions/${sessionId}/matches?${buildMatchParams(query)}`);
-  },
-
   getCandidate(candidateId: string): Promise<CandidateDetail> {
     return request(`/v1/candidates/${candidateId}`);
-  },
-
-  deleteSession(sessionId: string): Promise<void> {
-    return request(`/v1/sessions/${sessionId}`, { method: "DELETE" });
   },
 };

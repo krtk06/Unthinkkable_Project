@@ -55,11 +55,26 @@ curl 'http://127.0.0.1:8000/v1/sessions/<session_id>/matches?min_score=7&limit=2
 
 Uploads are accepted asynchronously at the API boundary, persisted as Atlas jobs, and return batch/job/candidate IDs. Workers claim jobs with leases and retry failed work through the same Atlas cluster.
 
+## Authentication
+
+The API and dashboard require a login. Set `AUTH_SECRET_KEY` in `.env` (a long random string). Users sign up at `http://localhost:3000/signup` with a username, email, and password. To provision an account directly, use:
+
+```bash
+.venv/bin/python scripts/create_user.py --username recruiter --email recruiter@example.com
+```
+
+Sign in with `POST /v1/auth/login` (`{username, password}`) to receive a bearer token; all `/v1/sessions/*` and `/v1/candidates/*` endpoints require it via `Authorization: Bearer <token>`. The dashboard redirects to `/login` until a valid token is stored.
+
+```bash
+# Demo against a running API (after creating a user):
+.venv/bin/python scripts/demo_api.py --username recruiter --password <password>
+```
+
 Original resume files use the local filesystem adapter in development. The persistence layer stores session documents with embedded job descriptions, candidates, processing attempts, extraction provenance, embeddings, and match results. OpenAI calls use JSON mode with versioned prompts under `prompts/`; ClamAV scanning fails closed when the service is unavailable or rejects a stream.
 
 ## Dashboard
 
-An optional Next.js review dashboard lives in `web/`. It covers session setup, drag-and-drop resume uploads with client-side validation, processing status polling, the ranked shortlist with threshold/top-N controls and filters, a candidate detail view with parsed fields, score breakdown, evidence quotes, and uncertainty notes, plus JSON/CSV export. Scores render as a 10-segment rubric gauge whose colors match the PRD score bands, and every screen labels AI output as decision support.
+An optional Next.js review dashboard lives in `web/`. It covers session setup with automatic uploads — drop a job description and resumes and they are sent immediately, with no upload buttons. Processing status is polled, and candidates render as ranked cards showing name, highest education, skills, and a 0–10 match score with the evidence-based rubric gauge, plus JSON/CSV export. AI output is labeled as decision support throughout.
 
 Run it against a local API:
 

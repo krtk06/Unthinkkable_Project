@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, type Variants } from "framer-motion";
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { usePrefersReducedMotion } from "@/lib/hooks";
 import { validateBatch, type FileRejection } from "@/lib/validation";
@@ -18,24 +18,34 @@ interface UploaderProps {
   onUploaded: (result: UploadResult) => void;
 }
 
-type UploadPhase = "idle" | "uploading" | "done" | "error";
+interface PendingFile {
+  file: File;
+  state: "waiting" | "uploading" | "uploaded" | "failed";
+}
 
 export default function Uploader({ sessionId, onUploaded }: UploaderProps) {
   const [dragActive, setDragActive] = useState(false);
-  const [pending, setPending] = useState<File[]>([]);
+  const [pending, setPending] = useState<PendingFile[]>([]);
   const [rejections, setRejections] = useState<FileRejection[]>([]);
-  const [phase, setPhase] = useState<UploadPhase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const prefersReduced = usePrefersReducedMotion();
+  const sessionIdRef = useRef(sessionId);
+  const onUploadedRef = useRef(onUploaded);
+  const drainingRef = useRef(false);
+
+  sessionIdRef.current = sessionId;
+  onUploadedRef.current = onUploaded;
 
   const addFiles = useCallback((incoming: File[]) => {
     if (incoming.length === 0) return;
     const { accepted, rejected } = validateBatch(incoming);
-    setPending((current) => [...current, ...accepted]);
+    setPending((current) => [
+      ...current,
+      ...accepted.map((file) => ({ file, state: "waiting" as const })),
+    ]);
     setRejections(rejected);
-    setPhase("idle");
     setErrorMessage(null);
   }, []);
 
@@ -45,25 +55,52 @@ export default function Uploader({ sessionId, onUploaded }: UploaderProps) {
     addFiles(Array.from(event.dataTransfer.files));
   }
 
-  async function handleUpload() {
-    if (!sessionId || pending.length === 0) return;
-    setPhase("uploading");
-    setErrorMessage(null);
-    try {
-      const result = await api.uploadResumes(sessionId, pending);
-      setPhase("done");
-      onUploaded(result);
-      setPending([]);
-      setRejections([]);
-    } catch (err) {
-      setPhase("error");
-      setErrorMessage(
-        err instanceof ApiError ? `${err.code}: ${err.message}` : "Upload failed. Check that the API is running."
-      );
-    }
-  }
+  useEffect(() => {
+    if (!sessionId) return;
 
-  const disabled = !sessionId || pending.length === 0 || phase === "uploading";
+    if (drainingRef.current) return;
+    const waiting = pending.filter((item) => item.state === "waiting");
+    if (waiting.length === 0) return;
+    drainingRef.current = true;
+
+    setPending((current) =>
+      current.map((item) =>
+        item.state === "waiting" ? { ...item, state: "uploading" } : item
+      )
+    );
+
+    api
+      .uploadResumes(
+        sessionId,
+        waiting.map((item) => item.file)
+      )
+      .then((result) => {
+        setPending((current) =>
+          current.map((item) =>
+            item.state === "uploading" ? { ...item, state: "uploaded" } : item
+          )
+        );
+        setRejections([]);
+        onUploadedRef.current(result);
+      })
+      .catch((err) => {
+        setPending((current) =>
+          current.map((item) =>
+            item.state === "uploading" ? { ...item, state: "failed" } : item
+          )
+        );
+        setErrorMessage(
+          err instanceof ApiError
+            ? `${err.code}: ${err.message}`
+            : "Upload failed. Check that the API is running."
+        );
+      })
+      .finally(() => {
+        drainingRef.current = false;
+      });
+  }, [sessionId, pending]);
+
+  const uploadedCount = pending.filter((item) => item.state === "uploaded").length;
 
   return (
     <section aria-labelledby="uploader-title">
@@ -86,7 +123,6 @@ export default function Uploader({ sessionId, onUploaded }: UploaderProps) {
           type="button"
           className="linkButton"
           onClick={() => inputRef.current?.click()}
-          disabled={!sessionId}
         >
           browse files
         </button>
@@ -103,42 +139,59 @@ export default function Uploader({ sessionId, onUploaded }: UploaderProps) {
           }}
         />
         <p>PDF, DOCX, or UTF-8 text. Up to 10 MB per file and 100 per batch.</p>
+        {!sessionId && (
+          <p className="hintText">
+            Upload a job description first — resumes are sent automatically.
+          </p>
+        )}
       </motion.div>
 
       {(pending.length > 0 || rejections.length > 0) && (
-        <>
-          <ul className={styles.fileList}>
-            {pending.map((file) => (
-              <li key={`${file.name}-${file.size}`} className={styles.fileItem}>
-                <span className={styles.fileName}>{file.name}</span>
-                <span className={`${styles.fileState} ${styles.stateOk}`}>ready</span>
-              </li>
-            ))}
-            {rejections.map((rejection, index) => (
-              <li
-                key={`${rejection.file.name}-${index}`}
-                className={styles.fileItem}
-                aria-label={`Rejected: ${rejection.message}`}
+        <ul className={styles.fileList}>
+          {pending.map((item) => (
+            <li key={`${item.file.name}-${item.file.size}`} className={styles.fileItem}>
+              <span className={styles.fileName}>{item.file.name}</span>
+              <span
+                className={`${styles.fileState} ${
+                  item.state === "uploaded" ? styles.stateOk : item.state === "failed" ? styles.stateError : ""
+                }`}
               >
-                <span className={styles.fileName}>{rejection.file.name}</span>
-                <span className={`${styles.fileState} ${styles.stateError}`} role="alert">
-                  {rejection.message}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <button className="primaryButton" type="button" onClick={handleUpload} disabled={disabled}>
-            {phase === "uploading" ? "Uploading…" : `Upload ${pending.length} resume${pending.length === 1 ? "" : "s"}`}
-          </button>
-        </>
+                {item.state === "waiting" && !sessionId
+                  ? "waiting for JD"
+                  : item.state === "waiting"
+                    ? "queued"
+                    : item.state === "uploading"
+                      ? "uploading…"
+                      : item.state === "uploaded"
+                        ? "uploaded"
+                        : "failed"}
+              </span>
+            </li>
+          ))}
+          {rejections.map((rejection, index) => (
+            <li
+              key={`${rejection.file.name}-${index}`}
+              className={styles.fileItem}
+              aria-label={`Rejected: ${rejection.message}`}
+            >
+              <span className={styles.fileName}>{rejection.file.name}</span>
+              <span className={`${styles.fileState} ${styles.stateError}`} role="alert">
+                {rejection.message}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
-      {phase === "error" && errorMessage && (
+      {uploadedCount > 0 && (
+        <p className="hintText" role="status">
+          {uploadedCount} resume{uploadedCount === 1 ? "" : "s"} uploaded — scoring runs
+          automatically.
+        </p>
+      )}
+      {errorMessage && (
         <p role="alert" className="fieldError">
           {errorMessage}
         </p>
-      )}
-      {!sessionId && (
-        <p className="hintText">Start a session with a job description to enable uploads.</p>
       )}
     </section>
   );

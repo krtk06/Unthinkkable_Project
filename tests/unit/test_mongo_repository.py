@@ -116,6 +116,50 @@ def test_mongo_match_update_targets_only_requested_candidate() -> None:
     assert second_match["score"] == 9
 
 
+def test_mongo_repository_resets_scoring_for_parsed_candidates() -> None:
+    repository = make_repository()
+    session_id = repository.create_session()
+    parsed = repository.add_resume(
+        session_id,
+        filename="parsed.txt",
+        content_type="text/plain",
+        size_bytes=1,
+        checksum="1" * 64,
+        storage_uri="local://1",
+    )
+    repository.save_extraction(
+        parsed["id"],
+        text="Python",
+        page_count=1,
+        ocr_used=False,
+        warnings=[],
+        parsed={"schema_version": "1.0"},
+        provenance={"provider": "test", "model": "test", "prompt_version": "v1"},
+    )
+    repository.save_match(parsed["id"], {"candidate_id": parsed["id"], "score": 8})
+
+    unparsed = repository.add_resume(
+        session_id,
+        filename="unparsed.txt",
+        content_type="text/plain",
+        size_bytes=1,
+        checksum="2" * 64,
+        storage_uri="local://2",
+    )
+
+    count = repository.reset_scoring_for_session(session_id)
+
+    assert count == 1
+    parsed_after = repository.get_candidate(parsed["id"])
+    assert parsed_after is not None
+    assert parsed_after.get("match") is None
+    assert parsed_after["resume"]["status"] == "parsed"
+
+    unparsed_after = repository.get_candidate(unparsed["id"])
+    assert unparsed_after is not None
+    assert unparsed_after["resume"]["status"] == "queued"
+
+
 def test_mongo_repository_distinguishes_missing_session() -> None:
     repository = make_repository()
 

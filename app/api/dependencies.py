@@ -4,6 +4,7 @@ from pathlib import Path
 from app.config import Settings, get_settings
 from app.db.client import create_mongo_client, get_database
 from app.db.mongo_repository import MongoResumeRepository
+from app.db.user_repository import UserRepository
 from app.ingestion.storage import LocalFileStorage
 from app.ingestion.text_extract import ExtractionResult, extract_text
 from app.llm.client import OpenAITransport, StructuredLLMClient
@@ -22,6 +23,13 @@ def get_repository() -> MongoResumeRepository:
 
 
 @lru_cache(maxsize=1)
+def get_user_repository() -> UserRepository:
+    settings: Settings = get_settings()
+    client = create_mongo_client(settings)
+    return UserRepository(get_database(client, settings))
+
+
+@lru_cache(maxsize=1)
 def get_storage() -> LocalFileStorage:
     return LocalFileStorage(Path(get_settings().local_storage_root))
 
@@ -29,7 +37,9 @@ def get_storage() -> LocalFileStorage:
 @lru_cache(maxsize=1)
 def get_malware_scanner() -> ClamAVScanner:
     settings = get_settings()
-    return ClamAVScanner(settings.clamav_host, settings.clamav_port)
+    return ClamAVScanner(
+        settings.clamav_host, settings.clamav_port, settings.clamav_socket
+    )
 
 
 @lru_cache(maxsize=1)

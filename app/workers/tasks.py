@@ -121,8 +121,7 @@ class ResumeWorker:
             self.repository.record_attempt(candidate_id, "score", "started")
             try:
                 result = score_match(requirements, resume, embedding_context, client)
-                if result.candidate_id != candidate_id:
-                    raise ValueError("CANDIDATE_ID_MISMATCH")
+                result = result.model_copy(update={"candidate_id": candidate_id})
                 if not self.repository.save_match(candidate_id, result.model_dump(mode="json")):
                     existing = self.repository.get_match(candidate_id)
                     if existing is None:

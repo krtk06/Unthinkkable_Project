@@ -207,14 +207,35 @@ class MongoResumeRepository:
         if result.matched_count != 1:
             raise ValueError("SESSION_NOT_FOUND")
 
+    def reset_scoring_for_session(self, session_id: str) -> int:
+        count = 0
+        for candidate in self.list_candidates(session_id):
+            if candidate.get("resume", {}).get("parsed_json") is not None:
+                result = self.sessions.update_one(
+                    {"_id": session_id, "candidates.id": candidate["id"]},
+                    {
+                        "$unset": {"candidates.$.match": ""},
+                        "$set": {"candidates.$.resume.status": "parsed"},
+                    },
+                )
+                count += result.modified_count
+        return count
+
     def save_match(self, candidate_id: str, match: dict[str, Any]) -> bool:
+        success = {
+            "$set": {
+                "candidates.$.match": match,
+                "candidates.$.resume.status": "scored",
+                "candidates.$.resume.error_code": None,
+            }
+        }
         updated = self.sessions.update_one(
             {
                 "candidates": {
                     "$elemMatch": {"id": candidate_id, "match": {"$exists": True}}
                 }
             },
-            {"$set": {"candidates.$.match": match, "candidates.$.resume.status": "scored"}},
+            success,
         )
         if updated.modified_count == 1:
             return True
@@ -224,7 +245,7 @@ class MongoResumeRepository:
                     "$elemMatch": {"id": candidate_id, "match": {"$exists": False}}
                 }
             },
-            {"$set": {"candidates.$.match": match, "candidates.$.resume.status": "scored"}},
+            success,
         )
         return result.modified_count == 1
 

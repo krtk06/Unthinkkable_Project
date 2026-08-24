@@ -55,16 +55,7 @@ describe("JDFileUploader", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Unsupported file type");
   });
 
-  it("shows file info and remove button after selecting a valid file", async () => {
-    render(<JDFileUploader sessionId={null} onSessionCreated={() => undefined} onNormalized={() => undefined} />);
-    const input = screen.getByLabelText(/drop a job description file or click to browse/i) as HTMLInputElement;
-    selectFile(input, makeFile("jd.pdf", 1024, "application/pdf"));
-    expect(await screen.findByText("jd.pdf")).toBeInTheDocument();
-    expect(screen.getByText(/remove/i)).toBeInTheDocument();
-  });
-
-  it("creates a session, uploads the file, and reports normalized requirements", async () => {
-    const user = userEvent.setup();
+  it("creates a session and uploads automatically when a valid file is selected", async () => {
     mockedApi.createSession.mockResolvedValue({ session_id: "sess_1" });
     mockedApi.uploadJobDescriptionFile.mockResolvedValue({
       session_id: "sess_1",
@@ -83,7 +74,6 @@ describe("JDFileUploader", () => {
 
     const input = screen.getByLabelText(/drop a job description file or click to browse/i) as HTMLInputElement;
     selectFile(input, makeFile("jd.pdf", 100, "application/pdf"));
-    await user.click(await screen.findByRole("button", { name: /analyze/i }));
 
     await waitFor(() => {
       expect(onSessionCreated).toHaveBeenCalledWith("sess_1");
@@ -94,8 +84,32 @@ describe("JDFileUploader", () => {
     });
   });
 
+  it("does not require a separate upload step when a session already exists", async () => {
+    mockedApi.uploadJobDescriptionFile.mockResolvedValue({
+      session_id: "sess_1",
+      status: "accepted",
+      normalized_requirements: {
+        title: "Backend Engineer",
+        required: [{ name: "Python", type: "skill" }],
+        preferred: [],
+        responsibilities: [],
+        ambiguities: [],
+      },
+    });
+    const onNormalized = vi.fn();
+    render(<JDFileUploader sessionId="sess_1" onSessionCreated={() => undefined} onNormalized={onNormalized} />);
+
+    const input = screen.getByLabelText(/drop a job description file or click to browse/i) as HTMLInputElement;
+    selectFile(input, makeFile("jd.pdf", 100, "application/pdf"));
+
+    await waitFor(() => {
+      expect(onNormalized).toHaveBeenCalled();
+    });
+    expect(mockedApi.createSession).not.toHaveBeenCalled();
+    expect(mockedApi.uploadJobDescriptionFile).toHaveBeenCalledWith("sess_1", expect.any(File));
+  });
+
   it("surfaces an API error without losing the selected file", async () => {
-    const user = userEvent.setup();
     mockedApi.createSession.mockResolvedValue({ session_id: "sess_1" });
     mockedApi.uploadJobDescriptionFile.mockRejectedValue(
       new api.ApiError("PROVIDER_DOWN", "LLM unavailable", 502)
@@ -104,7 +118,6 @@ describe("JDFileUploader", () => {
 
     const input = screen.getByLabelText(/drop a job description file or click to browse/i) as HTMLInputElement;
     selectFile(input, makeFile("jd.pdf", 100, "application/pdf"));
-    await user.click(await screen.findByRole("button", { name: /analyze/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("PROVIDER_DOWN: LLM unavailable");
     expect(screen.getByText("jd.pdf")).toBeInTheDocument();
@@ -120,15 +133,15 @@ describe("Uploader", () => {
     return new File(["x".repeat(size)], name, { type: "application/pdf" });
   }
 
-  it("disables browsing before a session exists and shows a hint", () => {
+  it("waits for a session before uploading and shows a hint", () => {
     render(<Uploader sessionId={null} onUploaded={() => undefined} />);
-    expect(screen.getByRole("button", { name: /browse files/i })).toBeDisabled();
-    expect(screen.getByText(/start a session with a job description/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /browse files/i })).toBeInTheDocument();
+    expect(screen.getByText(/upload a job description first/i)).toBeInTheDocument();
   });
 
   it("lists ready files and rejected validation errors separately", async () => {
     const user = userEvent.setup();
-    render(<Uploader sessionId="sess_1" onUploaded={() => undefined} />);
+    render(<Uploader sessionId={null} onUploaded={() => undefined} />);
     await user.click(screen.getByRole("button", { name: /browse files/i }));
     selectFiles(screen.getByLabelText(/drop resumes here or/i) as HTMLInputElement, [
       makeResume("good.pdf"),
@@ -139,7 +152,7 @@ describe("Uploader", () => {
     expect(screen.queryByText("bad.pdf")).not.toBeInTheDocument();
   });
 
-  it("uploads accepted files and reports the batch result", async () => {
+  it("uploads accepted files automatically once a session exists", async () => {
     const user = userEvent.setup();
     mockedApi.uploadResumes.mockResolvedValue({
       session_id: "sess_1",
@@ -152,7 +165,6 @@ describe("Uploader", () => {
     render(<Uploader sessionId="sess_1" onUploaded={onUploaded} />);
     await user.click(screen.getByRole("button", { name: /browse files/i }));
     selectFiles(screen.getByLabelText(/drop resumes here or/i) as HTMLInputElement, [makeResume("one.pdf")]);
-    await user.click(screen.getByRole("button", { name: /upload 1 resume/i }));
     await waitFor(() => expect(onUploaded).toHaveBeenCalledTimes(1));
     expect(mockedApi.uploadResumes).toHaveBeenCalledTimes(1);
     const [calledSession, calledFiles, calledKey] = mockedApi.uploadResumes.mock.calls[0]!;
@@ -168,7 +180,6 @@ describe("Uploader", () => {
     render(<Uploader sessionId="sess_1" onUploaded={() => undefined} />);
     await user.click(screen.getByRole("button", { name: /browse files/i }));
     selectFiles(screen.getByLabelText(/drop resumes here or/i) as HTMLInputElement, [makeResume("one.pdf")]);
-    await user.click(screen.getByRole("button", { name: /upload 1 resume/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent("SESSION_NOT_FOUND: gone");
   });
 });

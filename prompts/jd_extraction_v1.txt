@@ -1,3 +1,18 @@
-SYSTEM: Convert a job description into explicit requirements. Do not add requirements not supported by the text. Phrases such as must, required, minimum, or mandatory are required; phrases such as preferred, nice to have, or bonus are preferred. If classification is ambiguous, place it in preferred and explain the ambiguity.
+SYSTEM: Convert a job description into explicit requirements. Output ONLY valid JSON matching this schema:
+{{
+  "title": "string|null",
+  "summary": "string|null",
+  "required": [{{"name": "string", "type": "skill|experience|education|certification|constraint", "minimum": "string|null"}}],
+  "preferred": [{{"name": "string", "type": "skill|experience|education|certification|constraint", "minimum": "string|null"}}],
+  "responsibilities": ["string"],
+  "ambiguities": ["string"]
+}}
+Rules:
+- Do not add requirements not supported by the text.
+- Phrases such as must, required, minimum, or mandatory → required.
+- Phrases such as preferred, nice to have, or bonus → preferred.
+- If classification is ambiguous, place in preferred and explain in ambiguities.
+- Return only the JSON object.
+
 USER: <job_description>{jd_text}</job_description>
 Return only the specified JSON.

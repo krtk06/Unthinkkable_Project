@@ -1,206 +1,160 @@
-# Smart Resume Screener — UI Redesign (Completed)
+# Smart Resume Screener — Implementation Plan (Demo Parity)
 
-> **Status:** ✅ Implementation complete. All phases delivered, tested, and ready for Vercel deployment.
-
-**Goal:** Redesign the Next.js dashboard with a warm dark glassmorphism theme, Tailwind CSS + Framer Motion, JD file upload (replacing text paste), and Vercel deployment readiness.
-
----
-
-## Tech Stack Additions
-
-| Package | Purpose |
-|---------|---------|
-| `tailwindcss` v4 + `@tailwindcss/postcss` | Utility-first styling |
-| `framer-motion` | Animations (fade-in, slide-up, stagger, scale, counter) |
-
-Backend: new `POST /v1/sessions/{id}/job-description/file` endpoint.
+> **Goal:** make the application match the `DemoVideo.mp4` flow and visuals exactly — from the login screen through the end-to-end screening workflow.
+>
+> **Scope:** full-stack — FastAPI (backend) + Next.js/React/TypeScript/Tailwind (frontend) + MongoDB.
 
 ---
 
-## Color System
+## 1. Demo flow (source of truth)
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| Background | `#121210` | Page background (warm near-black) |
-| Surface | `rgba(30, 30, 28, 0.6)` | Glass card background |
-| Surface Hover | `rgba(40, 40, 36, 0.7)` | Card hover state |
-| Border | `rgba(255, 255, 255, 0.08)` | Glass card border |
-| Text Primary | `#e8e6e1` | Primary text (warm white) |
-| Text Secondary | `#9a9890` | Secondary text |
-| Accent | `#34d399` | Primary actions (emerald-400) |
-| Accent Hover | `#6ee7b7` | Accent hover |
-| Error | `#f87171` | Error states |
-| Warning | `#fbbf24` | Warning states |
+Captured from `DemoVideo.mp4` (~1:33). The complete end-to-end flow is:
 
-## Glass Card System
+1. **Login page** — light beige background, white card. Small green "SMART RESUME SCREENER" eyebrow, bold "Welcome back", subtext "Sign in to continue screening candidates." Fields: **Email** and **Password**. Solid green "Login" button. Footer "Don't have an account? **Create an account**".
+2. **Dashboard** — three numbered sections, left column (inputs) + right column (results):
+   - **01 — Define the job**: "Role title" input, "Job description text" textarea, "File job description" submit button.
+   - **02 — Add candidates**: "Upload resumes" drop zone ("Drop resumes here or click to browse", "PDF or TXT - multiple files supported"), a live candidate counter, and a per-file status log ("`file.pdf - parsed (20 skills found)`").
+   - **03 — Review the shortlist**: a "Score all candidates" / "Re-score all candidates" button, and candidate cards.
+3. **Candidate card** — circular overall score (e.g. "7.2"), a "SHORTLISTED" badge, email + "0 yrs experience", **Skills / Experience / Education** sub-score breakdown, an analysis sentence with a **semantic similarity** score, green (matching) vs. red (missing) skill tags, and **Details** / **Delete** buttons.
+4. **Details modal** — tabs (Skills / Experience / Education), education line, "EXPERIENCE (N YRS DETECTED)" with projects + leadership, "RAW RESUME TEXT" section.
 
-```css
-background: rgba(30, 30, 28, 0.6);
-backdrop-filter: blur(16px);
-border: 1px solid rgba(255, 255, 255, 0.08);
-border-radius: 12px;
+**Header chrome throughout:** title + green diamond icon, "API connected" status pill (green dot), "Logout" button.
+
+---
+
+## 2. Decisions made during conversation
+
+| Topic | Decision |
+|---|---|
+| Login identifier | **Email + password** (demo-exact). Username removed from login; email is the login identifier. Username kept only on the sign-up form. |
+| JD entry | **Both paste text and file upload**. Role-title field + job-description textarea + "File job description" button, AND retain the existing JD file upload. |
+| Scoring model | **Demo breakdown**: overall 0–10 score (float) + Skills / Experience / Education sub-scores + semantic-similarity score + matching vs. missing skills + a shortlist flag + an analysis sentence. |
+| Visual theme | **Match the demo's light beige + green** aesthetic, replacing the current dark glassmorphism. |
+| Sign-up | **Open self-registration** (no invite gate): username + email + password + confirm. |
+| Auth model | **Per-user accounts** in MongoDB (bcrypt) + JWT; the entire `/v1` screening API is protected. |
+| JD re-scoring | **Already implemented**: updating a JD resets existing candidates and re-enqueues scoring (preserved). |
+
+---
+
+## 3. Architecture
+
+```
+Next.js (React 19, TS, Tailwind v4)
+        │  JSON + Bearer JWT
+        ▼
+FastAPI  (/v1/auth/*  — open;  /v1/sessions/*, /v1/candidates/* — protected)
+        │
+        ├── MongoDB  (sessions, users, jobs)  — candidates embedded in session docs
+        ├── LocalFileStorage  (originals, dev)
+        └── AtlasTaskQueue → ResumeWorker
+                ├── parse (extract resume)
+                ├── score (LLM breakdown + embeddings)
+                └── re-score on JD change
 ```
 
-## Animation Inventory (Framer Motion)
+### Data model change
 
-| Element | Animation | Reduced Motion |
-|---------|-----------|----------------|
-| Glass cards (`GlassCard`) | Fade-in + slide-up (`y: 16 → 0`, opacity `0 → 1`) | Skipped |
-| Drag zone (`Uploader`) | Scale pulse (`1 → 1.02`) on drag-over | Skipped |
-| Match table rows | Staggered slide-in (0.04s delay per row) | Skipped |
-| Candidate detail | Slide-in from right (`x: 32 → 0`) | Skipped |
-| Score gauge number | Counter animation (0 → final value, 0.6s) | Shows final value |
-| Table rows | Hover background transition | CSS transition |
-| Buttons | Subtle lift on hover (`translateY(-1px)`) | CSS transition |
-| Inputs | Border-color transition on focus | CSS transition |
+Replace `MatchResult` with a demo-shaped result:
 
-All animations respect `prefers-reduced-motion` via `usePrefersReducedMotion` hook + CSS media query.
+```python
+class MatchResult(StrictModel):
+    candidate_id: str
+    score: float                  # 0–10, one decimal (e.g. 7.2)
+    skills_score: float           # 0–10
+    experience_score: float       # 0–10
+    education_score: float        # 0–10
+    matching_skills: list[str]    # green tags
+    missing_skills: list[str]     # red tags
+    semantic_similarity: float    # 0–10 (embeddings)
+    analysis: str                 # the natural-language sentence
+    shortlisted: bool             # score >= threshold (default 7.0)
+    model: ModelMetadata
+```
 
----
-
-## Implementation Phases (Completed)
-
-### Phase 1: Tailwind CSS Foundation ✅
-- Installed `tailwindcss` + `@tailwindcss/postcss`
-- Created `postcss.config.mjs` and `tailwind.config.ts`
-- Replaced `globals.css` with Tailwind directives + dark theme tokens
-- Added Inter font via `next/font/google`
-- **Commits:** `939b3f0`, `b996ada`
-
-### Phase 2: Glass Card Components ✅
-- Created `GlassCard.tsx` (reusable glass wrapper with framer-motion)
-- Rewrote `page.tsx` with Tailwind classes, dark background, glass sidebar
-- Deleted `page.module.css`
-- Updated all 7 component CSS modules for dark theme tokens
-- Added global utility classes (`.linkButton`, `.primaryButton`, `.dangerButton`)
-- **Commits:** `55447a0`, `e188355`, `3e3858b`
-
-### Phase 3: JD File Upload ✅
-- Added `POST /v1/sessions/{session_id}/job-description/file` backend endpoint
-- Created `JDFileUploader.tsx` — single-file dropzone (drag-and-drop + click-to-browse)
-- Added `uploadJobDescriptionFile()` to `api.ts`
-- Replaced `JobDescriptionForm` in `page.tsx`
-- Deleted `JobDescriptionForm.tsx` and `SessionSetup.module.css`
-- Fixed component tests for new upload flow
-- **Commits:** `3a3a102`, `96ddb7a`, `2bc7879`, `880532c`, `49cfefc`
-
-### Phase 4: Framer Motion + Drag-and-Drop ✅
-- Installed `framer-motion`
-- Created `usePrefersReducedMotion` hook
-- Added fade-in/slide-up to `GlassCard`
-- Added staggered row animation to `MatchTable`
-- Added slide-in animation to `CandidateDetail`
-- Added scale effect to `Uploader` dropzone
-- **Commits:** `f1ef9cb`, `fd2edd4`
-
-### Phase 5: ScoreGauge + Polish ✅
-- Added counter animation to `ScoreGauge` (framer-motion animate)
-- Verified all CSS modules use dark theme tokens consistently
-- **Commits:** `461b904`
-
-### Phase 6: Deployment Prep ✅
-- Created `vercel.json` (minimal Vercel config)
-- Created `.env.example` (documents `NEXT_PUBLIC_API_BASE_URL`)
-- Updated `.gitignore` to allow `.env.example`
-- **Commits:** `656c487`
-
-### Phase 7: Micro-Interactions ✅
-- Added table row hover effect with transition
-- Added input/select focus transitions
-- Added tag hover effect
-- Added glass card border transition on hover
-- Added primary button lift on hover
-- Added explicit focus-visible indicators
-- **Commits:** `8e4212b`
-
-### Phase 8: CORS Fix ✅
-- Added `CORSMiddleware` to FastAPI backend for `localhost:3000`
-- **Commits:** `aa122ff`
-
-### Phase 9: Final QA ✅
-- All 15 frontend tests pass
-- All 79 backend tests pass
-- TypeScript clean
-- Python lint clean
-- Build succeeds
-
-### Phase 10: Cleanup ✅
-- Updated this implementation.md to reflect actual implementation
-- Verified no orphaned files
-- Verified git history is clean
+`score` becomes a float, which touches `ScoreGauge` (currently integer-only) and candidate sorting. The `users` collection keeps its unique `email` index; login resolves by email.
 
 ---
 
-## Files Created
+## 4. Phase-by-phase implementation plan
 
-| File | Purpose |
-|------|---------|
-| `web/postcss.config.mjs` | PostCSS config for Tailwind |
-| `web/tailwind.config.ts` | Tailwind theme config |
-| `web/components/GlassCard.tsx` | Reusable glass card (framer-motion) |
-| `web/components/JDFileUploader.tsx` | JD file upload component |
-| `web/lib/hooks.ts` | `usePrefersReducedMotion` hook |
-| `web/vercel.json` | Vercel deployment config |
-| `web/.env.example` | Environment variable docs |
+### Phase 1 — Login + sign-up parity
+- **`app/api/auth.py`**: `LoginRequest` → `{email, password}`; resolve via `get_by_email`, verify bcrypt hash, issue JWT (`sub` = user id or email). `SignupRequest` already `{username, email, password}`.
+- **`app/db/user_repository.py`**: ensure unique `email` index + `get_by_email` (present).
+- **`web/app/login/page.tsx`**: swap username → email field; call `api.login(email, password)`.
+- **`web/lib/api.ts`**: `login(email, password)` sends `{email, password}`.
+- **Tests**: update login test to use email; add unknown-email case.
 
-## Files Modified
+### Phase 2 — JD entry: role title + paste text + file upload
+- **`app/api/routes.py`**: add optional `title` to `JobDescriptionRequest`; pass through `save_job_description` so the normalized JD `title` can be overridden. Reuse existing `/job-description` (text) and `/job-description/file` endpoints (both already trigger `rescore_session`).
+- **Frontend**: new `JobDescriptionForm` (role title + textarea + "File job description" button → `POST /v1/sessions/{id}/job-description`). Keep `JDFileUploader` (file path) as a secondary "or upload a file" control.
+- **Note**: role title is display/metadata; scoring uses normalized requirements from the description text.
 
-| File | Change |
-|------|--------|
-| `web/package.json` | Added tailwindcss, @tailwindcss/postcss, framer-motion |
-| `web/app/globals.css` | Tailwind directives + dark theme tokens + utilities |
-| `web/app/layout.tsx` | Inter + Plex Mono fonts, dark body |
-| `web/app/page.tsx` | Tailwind classes, JDFileUploader, normalized requirements display |
-| `web/components/MatchTable.tsx` | framer-motion staggered rows |
-| `web/components/CandidateDetail.tsx` | framer-motion slide-in |
-| `web/components/ScoreGauge.tsx` | framer-motion counter animation |
-| `web/components/Uploader.tsx` | framer-motion drag scale |
-| `web/lib/api.ts` | Added `uploadJobDescriptionFile()` |
-| `app/api/routes.py` | Added JD file upload endpoint |
-| `app/main.py` | Added CORS middleware |
+### Phase 3 — Candidate count + per-file parse status log
+- **`app/api/routes.py`**: `session_status` already returns `total` + per-file `status`; derive `skills_count` from `resume.parsed_json.skills` on read (no migration).
+- **Frontend**: in "02 — Add candidates", render a live counter + status list ("`{filename} - parsed ({n} skills found)`").
 
-## Files Deleted
+### Phase 4 — Scoring model: demo breakdown
+- **`app/domain/match.py`**: rewrite `MatchResult` to the §3 shape.
+- **`app/matching/scoring.py` + `app/llm/client.py` + `prompts/match_scoring_v1.txt`**: update the prompt to return `{score, skills_score, experience_score, education_score, matching_skills, missing_skills, semantic_similarity, analysis}`. Compute `semantic_similarity` from embeddings when available; fall back to a lexical/Jaccard skill-overlap score when no embedding client is configured.
+- **`app/matching/embeddings.py`**: add an OpenAI embeddings-backed `EmbeddingClient` (or keep `NullEmbeddingClient` + lexical fallback).
+- **`app/workers/tasks.py`**: `score_candidate` persists the new fields; `shortlisted = score >= 7.0`.
+- **`app/api/routes.py`**: `/matches` returns the new fields; `candidate_detail` includes the full breakdown + `resume.extracted_text` (raw-text tab) + `parsed_json`.
+- **`web/lib/types.ts`**: mirror the new `Match` shape.
 
-| File | Reason |
-|------|--------|
-| `web/app/page.module.css` | Replaced by Tailwind |
-| `web/components/JobDescriptionForm.tsx` | Replaced by JDFileUploader |
-| `web/components/SessionSetup.module.css` | Replaced by JDFileUploader |
+### Phase 5 — Candidate card + details modal
+- **`web/components/CandidateCard.tsx`** (rewrite): circular float score, SHORTLISTED badge, email + experience, Skills/Experience/Education sub-score boxes, green/red skill tags, analysis sentence with semantic-similarity, Details + Delete buttons.
+- **`web/components/CandidateDetail.tsx`** (new modal): tabs Skills / Experience / Education; education summary; "EXPERIENCE (N YRS DETECTED)" with projects + leadership; "RAW RESUME TEXT" from `resume.extracted_text`.
+- **`app/api/routes.py`**: add `DELETE /v1/candidates/{candidate_id}` — remove from session `candidates` array + delete the original from storage.
+- **Frontend**: wire Delete to the new endpoint, then re-poll.
 
-## Files Retained (CSS Modules)
+### Phase 6 — "Score all / Re-score all candidates"
+- **Backend**: add `POST /v1/sessions/{session_id}/score` (reuse `rescore_session` for every parsed candidate).
+- **Frontend**: "Score all candidates" (enabled when JD filed + candidates exist) and "Re-score all candidates" (when already scored). Both call the endpoint and re-poll.
 
-These CSS modules were updated for dark theme and are still in use:
+### Phase 7 — Visual theme: light beige + green
+- **`web/app/globals.css` + `web/tailwind.config.ts`**: replace dark tokens with the demo's light palette (near-white beige background, white cards, green accent). Update `--color-bg`, `--color-surface`, `--color-text*`, `--color-accent*`, borders; remove the dark radial dot texture.
+- **Components**: restyle header (green diamond icon, "API connected" pill, Logout), cards, drop zone, buttons, modal.
 
-| File | Component |
-|------|-----------|
-| `web/components/CandidateDetail.module.css` | CandidateDetail |
-| `web/components/FilterBar.module.css` | FilterBar |
-| `web/components/MatchTable.module.css` | MatchTable |
-| `web/components/ScoreGauge.module.css` | ScoreGauge |
-| `web/components/StatusStrip.module.css` | StatusStrip |
-| `web/components/Uploader.module.css` | Uploader |
+### Phase 8 — Header chrome & "API connected" status
+- **Frontend**: add an "API connected" status pill (green dot) driven by a lightweight `/health` poll. Add the green diamond icon + restyle "Logout".
 
----
-
-## Deployment Instructions
-
-1. Go to [vercel.com/new](https://vercel.com/new)
-2. Import GitHub repository
-3. Framework: **Next.js** (auto-detected)
-4. Root directory: `web`
-5. Environment variables:
-   - `NEXT_PUBLIC_API_BASE_URL` → your backend URL
-6. Deploy
+### Phase 9 — Tests, docs, verification
+- **Backend tests**: update `test_scoring.py`, `test_workers.py`, `test_mongo_repository.py`, `test_session_routes.py` for the new `MatchResult` fields + delete-candidate endpoint.
+- **Frontend tests**: update `components.test.tsx` + add `CandidateDetail` test; update `dashboard.spec.ts` for the new card/breakdown + email login.
+- **Docs**: update `README.md` (email login, new scoring, delete, light theme).
+- **Verification gates**:
+  - Backend: `pytest -q`, `ruff check .`, `mypy app tests scripts`
+  - Frontend: `npx tsc --noEmit`, `NODE_ENV=test npm test`, `npm run test:e2e`, `npm run build`
 
 ---
 
-## Definition of Done — All Met ✅
+## 5. Files created / modified
 
-- [x] Dark glassmorphism theme renders across all components
-- [x] JD file upload works end-to-end (PDF/DOCX/TXT → text extraction → LLM normalization)
-- [x] Resume drag-and-drop upload with animations
-- [x] All Framer Motion animations play and respect `prefers-reduced-motion`
-- [x] `npm run build` succeeds with zero errors
-- [x] `npm test` passes (15/15 frontend, 79/79 backend)
-- [x] `npx tsc --noEmit` passes
-- [x] Deployable to Vercel with `NEXT_PUBLIC_API_BASE_URL` env var
+**Create**
+- `web/components/JobDescriptionForm.tsx`
+- `web/components/CandidateDetail.tsx` (+ `.module.css`)
+
+**Modify**
+- `app/api/auth.py` (email login)
+- `app/api/routes.py` (title field, delete candidate, score-all endpoint, match fields)
+- `app/db/user_repository.py` (email lookup wiring)
+- `app/domain/match.py` (new MatchResult)
+- `app/matching/scoring.py`, `app/matching/embeddings.py`, `app/llm/client.py`
+- `app/workers/tasks.py`
+- `prompts/match_scoring_v1.txt`
+- `web/lib/types.ts`, `web/lib/api.ts`
+- `web/app/login/page.tsx`, `web/app/page.tsx`, `web/app/globals.css`, `web/tailwind.config.ts`
+- `web/components/CandidateCard.tsx`, `ScoreGauge.tsx`, `Uploader.tsx`, `JDFileUploader.tsx`, `StatusStrip.tsx`
+- tests (backend + frontend), `README.md`
+
+**Rewrite**
+- `implementation.md` (this document)
+
+---
+
+## 6. Risks & notes
+
+- **Float score migration**: `score` changes `int → float`. Sorting, gauge clamping, and any `>= 7` shortlist logic must all switch to float. Backward-compat with existing `scored` documents is out of scope (dev data is disposable; the worker re-scores on JD change anyway).
+- **Semantic similarity needs embeddings**: if no embedding provider is configured, fall back to lexical skill-overlap so the UI never renders a blank similarity.
+- **Open sign-up**: per the decision, registration is now open. If the app becomes public-facing, revisit with an invite/allow-list gate.
+- **The demo is a separate static prototype** (`login.html`, `index.html` on `localhost:5500`); this plan re-implements its behavior in the existing Next.js + FastAPI stack, not by porting its HTML.

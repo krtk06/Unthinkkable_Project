@@ -106,7 +106,10 @@ class StructuredLLMClient:
         model: type[ModelT],
         validator: Callable[[ModelT], ModelT] | None = None,
     ) -> ModelT:
-        raw = self.transport.complete(f"{prompt}\nPROMPT_VERSION: {self.prompt_version}")
+        full_prompt = (
+            f"{prompt}\nJSON_SCHEMA: {model.model_json_schema()}"
+        )
+        raw = self.transport.complete(f"{full_prompt}\nPROMPT_VERSION: {self.prompt_version}")
         try:
             result = parse_structured_output(raw, model)
             return validator(result) if validator is not None else result
@@ -114,7 +117,7 @@ class StructuredLLMClient:
             repair_prompt = (
                 "REPAIR: Return only valid JSON matching the requested schema. "
                 f"The previous response failed with {error.code}.\n"
-                f"{prompt}\nPREVIOUS_RESPONSE:\n{raw}"
+                f"{full_prompt}\nPREVIOUS_RESPONSE:\n{raw}"
             )
             repaired = self.transport.complete(repair_prompt)
             result = parse_structured_output(repaired, model)
