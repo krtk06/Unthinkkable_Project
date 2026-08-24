@@ -70,6 +70,7 @@ export interface StatusFile {
   filename: string | null;
   status: string | null;
   error_code: string | null;
+  skills_count?: number;
 }
 
 export interface SessionStatus {

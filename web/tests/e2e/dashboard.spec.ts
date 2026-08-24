@@ -127,6 +127,7 @@ async function mockApi(page: Page, opts: { statusCallsBeforeScored?: number } = 
               filename: "jane.pdf",
               status: pending ? "uploaded" : "scored",
               error_code: null,
+              skills_count: pending ? 0 : 2,
             },
           ],
         },

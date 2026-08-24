@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CandidateCard from "@/components/CandidateCard";
+import CandidateStatusLog from "@/components/CandidateStatusLog";
 import JDFileUploader from "@/components/JDFileUploader";
 import JobDescriptionForm from "@/components/JobDescriptionForm";
 import StatusStrip from "@/components/StatusStrip";
@@ -178,6 +179,7 @@ export default function HomePage() {
             }}
           />
           <Uploader sessionId={sessionId} onUploaded={handleUploaded} />
+          <CandidateStatusLog status={status} />
         </aside>
 
         <main className="grid gap-5 min-w-0" aria-label="Screening results">

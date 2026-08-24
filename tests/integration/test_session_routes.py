@@ -127,6 +127,38 @@ async def test_status_detail_and_delete_session(client: httpx.AsyncClient) -> No
 
 
 @pytest.mark.anyio
+async def test_status_reports_parsed_skills_count(
+    client: httpx.AsyncClient,
+    repository: MongoResumeRepository,
+) -> None:
+    session_id = (await client.post("/v1/sessions", json={})).json()["session_id"]
+    candidate = repository.add_resume(
+        session_id,
+        filename="resume.txt",
+        content_type="text/plain",
+        size_bytes=4,
+        checksum="b" * 64,
+        storage_uri="local://b",
+    )
+    repository.save_extraction(
+        candidate["id"],
+        text="Python",
+        page_count=1,
+        ocr_used=False,
+        warnings=[],
+        parsed={"schema_version": "1.0", "skills": ["Python", "REST"]},
+        provenance={"provider": "test", "model": "test", "prompt_version": "v1"},
+    )
+
+    status = await client.get(f"/v1/sessions/{session_id}/status")
+
+    assert status.status_code == 200
+    assert status.json()["total"] == 1
+    assert status.json()["files"][0]["status"] == "parsed"
+    assert status.json()["files"][0]["skills_count"] == 2
+
+
+@pytest.mark.anyio
 async def test_matches_support_score_filters_and_cursor_pagination(
     client: httpx.AsyncClient,
     repository: MongoResumeRepository,

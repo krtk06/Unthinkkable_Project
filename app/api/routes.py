@@ -281,6 +281,9 @@ def session_status(
                 "filename": candidate["resume"].get("filename"),
                 "status": candidate["resume"].get("status"),
                 "error_code": candidate["resume"].get("error_code"),
+                "skills_count": len(
+                    (candidate.get("resume", {}).get("parsed_json") or {}).get("skills", [])
+                ),
             }
             for candidate in candidates
         ],
