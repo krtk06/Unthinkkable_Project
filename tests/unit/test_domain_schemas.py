@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain.job import JobRequirements, Requirement
-from app.domain.match import Evidence, MatchResult, ModelMetadata
+from app.domain.match import MatchResult, ModelMetadata
 from app.domain.resume import Candidate, Contact, Education, Experience, ExtractedResume
 
 
@@ -103,12 +103,14 @@ def test_match_schema_rejects_score_outside_rubric() -> None:
         MatchResult(
             candidate_id="candidate-1",
             score=11,
-            required_coverage=1,
-            preferred_coverage=0,
-            strengths=[],
-            gaps=[],
-            evidence=[Evidence(claim="Python", source="skills[0]", quote="Python")],
-            uncertainty=[],
+            skills_score=8,
+            experience_score=8,
+            education_score=8,
+            matching_skills=[],
+            missing_skills=[],
+            semantic_similarity=6.0,
+            analysis="",
+            shortlisted=True,
             model=ModelMetadata(provider="test", model="test", prompt_version="test-v1"),
         )
 
@@ -126,11 +128,11 @@ def test_match_schema_requires_explanation_fields() -> None:
     assert schema["required"] == [
         "candidate_id",
         "score",
-        "required_coverage",
-        "preferred_coverage",
-        "strengths",
-        "gaps",
-        "evidence",
-        "uncertainty",
+        "skills_score",
+        "experience_score",
+        "education_score",
+        "semantic_similarity",
+        "analysis",
+        "shortlisted",
         "model",
     ]

@@ -3,7 +3,7 @@ import pytest
 
 from app.db.mongo_repository import MongoResumeRepository
 from app.domain.job import JobRequirements
-from app.domain.match import MatchResult, ModelMetadata
+from app.domain.match import MatchBreakdown
 from app.domain.resume import ExtractedResume
 from app.ingestion.text_extract import ExtractionResult
 from app.workers.tasks import LocalTaskQueue, ResumeWorker, process_batch
@@ -52,17 +52,15 @@ class FakeScoringClient:
         requirements: JobRequirements,
         resume: ExtractedResume,
         embedding_context: str,
-    ) -> MatchResult:
-        return MatchResult(
-            candidate_id=self.candidate_id,
+    ) -> MatchBreakdown:
+        return MatchBreakdown(
             score=8,
-            required_coverage=1,
-            preferred_coverage=0,
-            strengths=["Python"],
-            gaps=[],
-            evidence=[],
-            uncertainty=[],
-            model=ModelMetadata(provider="test", model="test", prompt_version="v1"),
+            skills_score=8,
+            experience_score=10,
+            education_score=4,
+            matching_skills=["Python"],
+            missing_skills=["REST"],
+            analysis="The candidate is a strong fit.",
         )
 
 
@@ -72,7 +70,7 @@ class FailingScoringClient:
         requirements: JobRequirements,
         resume: ExtractedResume,
         embedding_context: str,
-    ) -> MatchResult:
+    ) -> MatchBreakdown:
         raise TimeoutError("provider unavailable")
 
 

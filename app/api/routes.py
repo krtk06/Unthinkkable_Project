@@ -294,14 +294,14 @@ def session_status(
 def session_matches(
     session_id: str,
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
-    threshold: int | None = None,
+    threshold: float | None = None,
     top_n: int | None = None,
-    min_score: int | None = None,
-    max_score: int | None = None,
+    min_score: float | None = None,
+    max_score: float | None = None,
     cursor: str | None = None,
     limit: int = 50,
-    min_required_coverage: float | None = None,
-    min_preferred_coverage: float | None = None,
+    min_skills_score: float | None = None,
+    shortlisted: bool | None = None,
     status: str | None = None,
     location: str | None = None,
     work_mode: str | None = None,
@@ -343,12 +343,10 @@ def session_matches(
         matches = [match for match in matches if match.get("score", 0) >= min_score]
     if max_score is not None:
         matches = [match for match in matches if match.get("score", 0) <= max_score]
-    matches = [
-        match
-        for match in matches
-        if min_required_coverage is None
-        or match.get("required_coverage", 0) >= min_required_coverage
-    ]
+    if min_skills_score is not None:
+        matches = [match for match in matches if match.get("skills_score", 0) >= min_skills_score]
+    if shortlisted is not None:
+        matches = [match for match in matches if match.get("shortlisted", False) == shortlisted]
     if required_skills_complete is not None:
         matches = [
             match
@@ -361,12 +359,6 @@ def session_matches(
             for match in matches
             if match["_metadata"].get("experience_months", 0) >= min_experience_months
         ]
-    matches = [
-        match
-        for match in matches
-        if min_preferred_coverage is None
-        or match.get("preferred_coverage", 0) >= min_preferred_coverage
-    ]
     matches = [
         match
         for match in matches
@@ -385,7 +377,7 @@ def session_matches(
     matches.sort(
         key=lambda match: (
             -match.get("score", 0),
-            -match.get("required_coverage", 0),
+            -match.get("skills_score", 0),
             match["candidate_id"],
         )
     )
@@ -397,21 +389,21 @@ def session_matches(
         raise api_error("INVALID_LIMIT", "limit must be between 1 and 100", 400)
     if cursor is not None:
         try:
-            cursor_score, cursor_coverage, cursor_id = cursor.split(":", 2)
-            cursor_key = (-int(cursor_score), -float(cursor_coverage), cursor_id)
+            cursor_score, cursor_skills, cursor_id = cursor.split(":", 2)
+            cursor_key = (-float(cursor_score), -float(cursor_skills), cursor_id)
         except ValueError as error:
             raise api_error("INVALID_CURSOR", "Cursor is malformed", 400) from error
         matches = [
             match
             for match in matches
-            if (-match.get("score", 0), -match.get("required_coverage", 0), match["candidate_id"])
+            if (-match.get("score", 0), -match.get("skills_score", 0), match["candidate_id"])
             > cursor_key
         ]
     page = matches[:limit]
     next_cursor = None
     if len(matches) > limit:
         last = page[-1]
-        next_cursor = f"{last['score']}:{last.get('required_coverage', 0)}:{last['candidate_id']}"
+        next_cursor = f"{last['score']}:{last.get('skills_score', 0)}:{last['candidate_id']}"
     for match in page:
         match.pop("_metadata", None)
     return {"session_id": session_id, "matches": page, "next_cursor": next_cursor}
@@ -457,10 +449,14 @@ def score_single_candidate(
     return {
         "candidate_id": candidate_id,
         "score": result.score,
-        "required_coverage": result.required_coverage,
-        "preferred_coverage": result.preferred_coverage,
-        "strengths": result.strengths,
-        "gaps": result.gaps,
+        "skills_score": result.skills_score,
+        "experience_score": result.experience_score,
+        "education_score": result.education_score,
+        "matching_skills": result.matching_skills,
+        "missing_skills": result.missing_skills,
+        "semantic_similarity": result.semantic_similarity,
+        "analysis": result.analysis,
+        "shortlisted": result.shortlisted,
     }
 
 

@@ -54,7 +54,17 @@ export default function HomePage() {
             );
             const experienceYears = Math.round((totalMonths / 12) * 10) / 10;
             const match = detail.match && "score" in (detail.match as Record<string, unknown>)
-              ? (detail.match as { score: number })
+              ? (detail.match as {
+                  score: number;
+                  skills_score?: number;
+                  experience_score?: number;
+                  education_score?: number;
+                  matching_skills?: string[];
+                  missing_skills?: string[];
+                  semantic_similarity?: number;
+                  analysis?: string;
+                  shortlisted?: boolean;
+                })
               : null;
 
             candidates.push({
@@ -69,6 +79,14 @@ export default function HomePage() {
               education: parsed.education || [],
               status: file.status as ParsedCandidate["status"],
               score: match?.score,
+              skills_score: match?.skills_score,
+              experience_score: match?.experience_score,
+              education_score: match?.education_score,
+              matching_skills: match?.matching_skills,
+              missing_skills: match?.missing_skills,
+              semantic_similarity: match?.semantic_similarity,
+              analysis: match?.analysis,
+              shortlisted: match?.shortlisted,
               filename: file.filename,
             });
           }

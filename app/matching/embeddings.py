@@ -1,6 +1,8 @@
 import hashlib
+import math
 from typing import Protocol
 
+from app.domain.job import JobRequirements
 from app.domain.resume import ExtractedResume
 
 
@@ -40,3 +42,40 @@ def build_candidate_text(resume: ExtractedResume) -> str:
 def embedding_cache_key(text: str, model: str, version: str) -> str:
     content = f"{version}\0{model}\0{text}".encode()
     return hashlib.sha256(content).hexdigest()
+
+
+def job_skill_names(requirements: JobRequirements) -> list[str]:
+    names = [requirement.name for requirement in requirements.required]
+    names.extend(requirement.name for requirement in requirements.preferred)
+    return names
+
+
+def lexical_skill_similarity(requirements: JobRequirements, resume: ExtractedResume) -> float:
+    """Jaccard-style overlap between JD skills and resume skills, scaled to 0-10."""
+    jd_skills = {name.lower() for name in job_skill_names(requirements)}
+    resume_skills = {skill.lower() for skill in resume.skills}
+    if not jd_skills or not resume_skills:
+        return 0.0
+    intersection = jd_skills & resume_skills
+    union = jd_skills | resume_skills
+    return round(10.0 * len(intersection) / len(union), 1)
+
+
+def cosine_similarity(left: list[float], right: list[float]) -> float:
+    """Cosine similarity mapped to 0-10. Empty vectors return 0.0."""
+    if not left or not right or len(left) != len(right):
+        return 0.0
+    dot = sum(a * b for a, b in zip(left, right, strict=True))
+    norm_left = math.sqrt(sum(a * a for a in left))
+    norm_right = math.sqrt(sum(b * b for b in right))
+    if norm_left == 0 or norm_right == 0:
+        return 0.0
+    cosine = dot / (norm_left * norm_right)
+    return round(max(0.0, min(1.0, cosine)) * 10.0, 1)
+
+
+def build_jd_text(requirements: JobRequirements) -> str:
+    sections = [f"Title: {requirements.title or ''}"]
+    sections.append("Skills: " + ", ".join(job_skill_names(requirements)))
+    sections.extend(requirements.responsibilities)
+    return "\n".join(section for section in sections if section.strip())

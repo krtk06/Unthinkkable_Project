@@ -42,18 +42,14 @@ const CANDIDATE = {
   match: {
     candidate_id: "cand_1",
     score: 8,
-    required_coverage: 0.9,
-    preferred_coverage: 0.5,
-    strengths: ["Four years of Python REST-service experience"],
-    gaps: ["Kubernetes experience not found"],
-    evidence: [
-      {
-        claim: "Python REST APIs",
-        source: "experience[0].description",
-        quote: "Built and operated Python REST services for four years.",
-      },
-    ],
-    uncertainty: [],
+    skills_score: 8,
+    experience_score: 10,
+    education_score: 4,
+    matching_skills: ["Python", "REST"],
+    missing_skills: ["Kubernetes"],
+    semantic_similarity: 6.4,
+    analysis: "The candidate is a strong fit.",
+    shortlisted: true,
     model: { provider: "openai", model: "gpt-4o-mini", prompt_version: "match-v1" },
   },
 };

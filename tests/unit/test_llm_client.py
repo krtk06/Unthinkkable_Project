@@ -2,10 +2,9 @@ import json
 
 import pytest
 
-from app.domain.match import MatchResult
 from app.domain.resume import ExtractedResume
 from app.llm.client import StructuredLLMClient
-from app.llm.validation import StructuredOutputError, validate_match_evidence
+from app.llm.validation import StructuredOutputError
 
 
 def valid_resume_payload() -> dict[str, object]:
@@ -64,42 +63,3 @@ def test_client_fails_after_repair_is_invalid() -> None:
     with pytest.raises(StructuredOutputError, match="INVALID_JSON"):
         client.extract_resume("Ada\nPython")
 
-
-def test_evidence_validation_rejects_unknown_source() -> None:
-    resume = ExtractedResume.model_validate(valid_resume_payload())
-    result = MatchResult.model_validate(
-        {
-            "candidate_id": "candidate-1",
-            "score": 8,
-            "required_coverage": 1,
-            "preferred_coverage": 0,
-            "strengths": [],
-            "gaps": [],
-            "evidence": [{"claim": "Python", "source": "skills[4]", "quote": "Python"}],
-            "uncertainty": [],
-            "model": {"provider": "test", "model": "test", "prompt_version": "v1"},
-        }
-    )
-
-    with pytest.raises(StructuredOutputError, match="EVIDENCE_SOURCE_NOT_FOUND"):
-        validate_match_evidence(result, resume)
-
-
-def test_evidence_validation_rejects_empty_quote() -> None:
-    resume = ExtractedResume.model_validate(valid_resume_payload())
-    result = MatchResult.model_validate(
-        {
-            "candidate_id": "candidate-1",
-            "score": 8,
-            "required_coverage": 1,
-            "preferred_coverage": 0,
-            "strengths": [],
-            "gaps": [],
-            "evidence": [{"claim": "Python", "source": "skills[0]", "quote": ""}],
-            "uncertainty": [],
-            "model": {"provider": "test", "model": "test", "prompt_version": "v1"},
-        }
-    )
-
-    with pytest.raises(StructuredOutputError, match="EVIDENCE_QUOTE_EMPTY"):
-        validate_match_evidence(result, resume)

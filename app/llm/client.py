@@ -6,12 +6,11 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 from app.domain.job import JobRequirements
-from app.domain.match import MatchResult
+from app.domain.match import MatchBreakdown
 from app.domain.resume import ExtractedResume
 from app.llm.validation import (
     StructuredOutputError,
     parse_structured_output,
-    validate_match_evidence,
 )
 
 
@@ -65,7 +64,7 @@ class LLMClient(Protocol):
 
     def score_match(
         self, requirements: JobRequirements, resume: ExtractedResume, embedding_context: str
-    ) -> MatchResult: ...
+    ) -> MatchBreakdown: ...
 
 
 class StructuredLLMClient:
@@ -90,15 +89,13 @@ class StructuredLLMClient:
 
     def score_match(
         self, requirements: JobRequirements, resume: ExtractedResume, embedding_context: str
-    ) -> MatchResult:
+    ) -> MatchBreakdown:
         prompt = self._load_prompt("match_scoring_v1.txt").format(
             requirements_json=requirements.model_dump_json(),
             extracted_resume_json=resume.model_dump_json(),
             embedding_context=embedding_context,
         )
-        return self._complete_with_repair(
-            prompt, MatchResult, validator=lambda result: validate_match_evidence(result, resume)
-        )
+        return self._complete_with_repair(prompt, MatchBreakdown)
 
     def _complete_with_repair(
         self,

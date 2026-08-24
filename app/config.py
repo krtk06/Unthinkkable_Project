@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     llm_timeout: float = Field(default=30.0, gt=0, le=120.0)
     auth_secret_key: str = Field(default="", repr=False)
     auth_token_expiry_minutes: int = Field(default=1440, ge=1, le=43200)
+    shortlist_threshold: float = Field(default=7.0, ge=0, le=10)
 
 
 @lru_cache(maxsize=1)

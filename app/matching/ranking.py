@@ -5,7 +5,7 @@ from app.domain.match import MatchResult
 
 def rank_matches(
     matches: list[MatchResult],
-    threshold: int | None = None,
+    threshold: float | None = None,
     top_n: int | None = None,
     filters: dict[str, Any] | None = None,
     metadata: dict[str, dict[str, Any]] | None = None,
@@ -14,7 +14,7 @@ def rank_matches(
 ) -> list[MatchResult]:
     if threshold is not None and top_n is not None:
         raise ValueError("THRESHOLD_TOP_N_CONFLICT")
-    if threshold is not None and not 1 <= threshold <= 10:
+    if threshold is not None and not 0 <= threshold <= 10:
         raise ValueError("INVALID_THRESHOLD")
     if top_n is not None and top_n < 0:
         raise ValueError("INVALID_TOP_N")
@@ -24,7 +24,7 @@ def rank_matches(
     selected = [item for item in matches if _matches_filters(item, filters or {}, metadata or {})]
     if threshold is not None:
         selected = [item for item in selected if item.score >= threshold]
-    selected.sort(key=lambda item: (-item.score, -item.required_coverage, item.candidate_id))
+    selected.sort(key=lambda item: (-item.score, -item.skills_score, item.candidate_id))
     if top_n is not None:
         selected = selected[:top_n]
     return selected[offset:] if limit is None else selected[offset : offset + limit]
@@ -37,16 +37,10 @@ def _matches_filters(
         return False
     if "max_score" in filters and item.score > filters["max_score"]:
         return False
-    if (
-        "min_required_coverage" in filters
-        and item.required_coverage < filters["min_required_coverage"]
-    ):
+    if "min_skills_score" in filters and item.skills_score < filters["min_skills_score"]:
         return False
     candidate_metadata = metadata.get(item.candidate_id, {})
-    if (
-        "min_preferred_coverage" in filters
-        and item.preferred_coverage < filters["min_preferred_coverage"]
-    ):
+    if "shortlisted" in filters and item.shortlisted != filters["shortlisted"]:
         return False
     if (
         "required_skills_complete" in filters

@@ -5,10 +5,17 @@ from typing import Protocol, cast
 
 from app.db.mongo_repository import MongoResumeRepository
 from app.domain.job import JobRequirements
-from app.domain.match import MatchResult
+from app.domain.match import MatchResult, ModelMetadata
 from app.domain.resume import ExtractedResume
 from app.ingestion.text_extract import ExtractionResult
-from app.matching.embeddings import EmbeddingClient, embed_candidate
+from app.matching.embeddings import (
+    EmbeddingClient,
+    build_candidate_text,
+    build_jd_text,
+    cosine_similarity,
+    embed_candidate,
+    lexical_skill_similarity,
+)
 from app.matching.scoring import ScoringClient
 from app.matching.scoring import score_candidate as score_match
 from app.workers.queue import AtlasTaskQueue
@@ -41,6 +48,7 @@ class ResumeWorker:
         prompt_version: str,
         embedding_client: EmbeddingClient | None = None,
         embedding_model: str = "",
+        shortlist_threshold: float = 7.0,
     ) -> None:
         self.repository = repository
         self.storage = storage
@@ -51,6 +59,7 @@ class ResumeWorker:
         self.prompt_version = prompt_version
         self.embedding_client = embedding_client
         self.embedding_model = embedding_model
+        self.shortlist_threshold = shortlist_threshold
 
     def process_resume(self, candidate_id: str) -> str:
         candidate = self.repository.get_candidate(candidate_id)
@@ -120,7 +129,20 @@ class ResumeWorker:
             resume = ExtractedResume.model_validate(parsed)
             self.repository.record_attempt(candidate_id, "score", "started")
             try:
-                result = score_match(requirements, resume, embedding_context, client)
+                similarity = self._semantic_similarity(requirements, resume)
+                context = f"similarity:{similarity:.1f}"
+                result = score_match(
+                    requirements,
+                    resume,
+                    context,
+                    client,
+                    model=ModelMetadata(
+                        provider=self.provider,
+                        model=self.model,
+                        prompt_version=self.prompt_version,
+                    ),
+                    shortlist_threshold=self.shortlist_threshold,
+                )
                 result = result.model_copy(update={"candidate_id": candidate_id})
                 if not self.repository.save_match(candidate_id, result.model_dump(mode="json")):
                     existing = self.repository.get_match(candidate_id)
@@ -135,6 +157,16 @@ class ResumeWorker:
                 )
                 self.repository.update_stage(candidate_id, "score_failed", type(error).__name__)
                 raise
+
+    def _semantic_similarity(
+        self, requirements: JobRequirements, resume: ExtractedResume
+    ) -> float:
+        if self.embedding_client is not None:
+            jd_vector = self.embedding_client.embed(build_jd_text(requirements))
+            candidate_vector = self.embedding_client.embed(build_candidate_text(resume))
+            if jd_vector and candidate_vector:
+                return cosine_similarity(jd_vector, candidate_vector)
+        return lexical_skill_similarity(requirements, resume)
 
 
 def process_resume(worker: ResumeWorker, candidate_id: str) -> str:

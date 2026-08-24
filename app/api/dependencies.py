@@ -69,6 +69,7 @@ def get_worker() -> ResumeWorker:
         provider="openai",
         model=settings.llm_model,
         prompt_version="v1",
+        shortlist_threshold=settings.shortlist_threshold,
     )
 
 

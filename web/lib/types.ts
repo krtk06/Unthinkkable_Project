@@ -1,9 +1,3 @@
-export interface Evidence {
-  claim: string;
-  source: string;
-  quote: string;
-}
-
 export interface ModelMetadata {
   provider: string;
   model: string;
@@ -13,12 +7,14 @@ export interface ModelMetadata {
 export interface Match {
   candidate_id: string;
   score: number;
-  required_coverage: number;
-  preferred_coverage: number;
-  strengths: string[];
-  gaps: string[];
-  evidence: Evidence[];
-  uncertainty: string[];
+  skills_score: number;
+  experience_score: number;
+  education_score: number;
+  matching_skills: string[];
+  missing_skills: string[];
+  semantic_similarity: number;
+  analysis: string;
+  shortlisted: boolean;
   model: ModelMetadata;
 }
 
@@ -156,5 +152,13 @@ export interface ParsedCandidate {
   education: EducationRecord[];
   status: "parsed" | "scoring" | "scored" | "failed";
   score?: number;
+  skills_score?: number;
+  experience_score?: number;
+  education_score?: number;
+  matching_skills?: string[];
+  missing_skills?: string[];
+  semantic_similarity?: number;
+  analysis?: string;
+  shortlisted?: boolean;
   filename?: string | null;
 }

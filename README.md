@@ -175,7 +175,7 @@ All prompts are versioned files under `prompts/` and referenced by `prompt_versi
 
 - `resume_extraction_v1.txt`: extract structured resume fields, no invention, warnings for missing data
 - `jd_extraction_v1.txt`: classify requirements as required/preferred, surface ambiguities
-- `match_scoring_v1.txt`: 1-10 rubric with evidence citations, strengths/gaps/uncertainty, max 5 evidence items
+- `match_scoring_v1.txt`: 0-10 rubric with Skills/Experience/Education sub-scores, matching vs. missing skills, and an analysis sentence
 
 ## Final Verification
 
