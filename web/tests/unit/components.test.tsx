@@ -2,12 +2,14 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import JDFileUploader from "@/components/JDFileUploader";
+import JobDescriptionForm from "@/components/JobDescriptionForm";
 import Uploader from "@/components/Uploader";
 import * as api from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   api: {
     createSession: vi.fn(),
+    saveJobDescriptionText: vi.fn(),
     uploadJobDescriptionFile: vi.fn(),
     uploadResumes: vi.fn(),
   },
@@ -44,6 +46,7 @@ describe("JDFileUploader", () => {
 
   it("shows a drop zone with accepted file types", () => {
     render(<JDFileUploader sessionId={null} onSessionCreated={() => undefined} onNormalized={() => undefined} />);
+    expect(screen.getByText(/upload a job description file/i)).toBeInTheDocument();
     expect(screen.getByText(/drop a job description here or/i)).toBeInTheDocument();
     expect(screen.getByText(/pdf, docx, or txt/i)).toBeInTheDocument();
   });
@@ -181,5 +184,62 @@ describe("Uploader", () => {
     await user.click(screen.getByRole("button", { name: /browse files/i }));
     selectFiles(screen.getByLabelText(/drop resumes here or/i) as HTMLInputElement, [makeResume("one.pdf")]);
     expect(await screen.findByRole("alert")).toHaveTextContent("SESSION_NOT_FOUND: gone");
+  });
+});
+
+describe("JobDescriptionForm", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("creates a session and files the pasted job description", async () => {
+    const user = userEvent.setup();
+    mockedApi.createSession.mockResolvedValue({ session_id: "sess_1" });
+    mockedApi.saveJobDescriptionText.mockResolvedValue({
+      session_id: "sess_1",
+      status: "accepted",
+      normalized_requirements: {
+        title: "Backend Engineer",
+        required: [{ name: "Python", type: "skill" }],
+        preferred: [],
+        responsibilities: [],
+        ambiguities: [],
+      },
+    });
+    const onSessionCreated = vi.fn();
+    const onNormalized = vi.fn();
+    render(
+      <JobDescriptionForm
+        sessionId={null}
+        onSessionCreated={onSessionCreated}
+        onNormalized={onNormalized}
+      />
+    );
+
+    await user.type(screen.getByLabelText(/role title/i), "Backend Engineer");
+    await user.type(screen.getByLabelText(/job description text/i), "Must know Python");
+    await user.click(screen.getByRole("button", { name: /file job description/i }));
+
+    await waitFor(() => expect(onSessionCreated).toHaveBeenCalledWith("sess_1"));
+    expect(mockedApi.saveJobDescriptionText).toHaveBeenCalledWith(
+      "sess_1",
+      "Must know Python",
+      "Backend Engineer"
+    );
+    await waitFor(() => expect(onNormalized).toHaveBeenCalled());
+  });
+
+  it("rejects an empty description without calling the API", async () => {
+    const user = userEvent.setup();
+    render(
+      <JobDescriptionForm
+        sessionId="sess_1"
+        onSessionCreated={() => undefined}
+        onNormalized={() => undefined}
+      />
+    );
+    await user.click(screen.getByRole("button", { name: /file job description/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a job description");
+    expect(mockedApi.saveJobDescriptionText).not.toHaveBeenCalled();
   });
 });

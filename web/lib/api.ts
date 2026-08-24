@@ -79,9 +79,26 @@ export const api = {
     });
   },
 
+  saveJobDescriptionText(
+    sessionId: string,
+    text: string,
+    title?: string
+  ): Promise<{
+    session_id: string;
+    status: string;
+    normalized_requirements: NormalizedRequirements;
+  }> {
+    return request(`/v1/sessions/${sessionId}/job-description`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, title: title ?? null }),
+    });
+  },
+
   uploadJobDescriptionFile(
     sessionId: string,
-    file: File
+    file: File,
+    title?: string
   ): Promise<{
     session_id: string;
     status: string;
@@ -89,6 +106,7 @@ export const api = {
   }> {
     const form = new FormData();
     form.append("file", file, file.name);
+    if (title) form.append("title", title);
     return request(`/v1/sessions/${sessionId}/job-description/file`, {
       method: "POST",
       body: form,

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CandidateCard from "@/components/CandidateCard";
 import JDFileUploader from "@/components/JDFileUploader";
+import JobDescriptionForm from "@/components/JobDescriptionForm";
 import StatusStrip from "@/components/StatusStrip";
 import Uploader from "@/components/Uploader";
 import { api } from "@/lib/api";
@@ -158,6 +159,15 @@ export default function HomePage() {
 
       <div className="grid gap-8 items-start lg:grid-cols-[360px_1fr]">
         <aside className="flex flex-col gap-5 lg:sticky lg:top-6">
+          <JobDescriptionForm
+            sessionId={sessionId}
+            onSessionCreated={handleSessionCreated}
+            onNormalized={setNormalized}
+            onSubmitted={() => {
+              setErrorBanner(null);
+              void poll();
+            }}
+          />
           <JDFileUploader
             sessionId={sessionId}
             onSessionCreated={handleSessionCreated}

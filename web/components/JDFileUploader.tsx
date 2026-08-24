@@ -99,7 +99,7 @@ export default function JDFileUploader({
   return (
     <section className="glass p-5" aria-labelledby="jd-upload-title">
       <h2 className="text-base font-semibold tracking-tight text-text mb-4" id="jd-upload-title">
-        Job description
+        Or upload a job description file
       </h2>
 
       <div

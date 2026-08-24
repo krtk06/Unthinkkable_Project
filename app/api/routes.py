@@ -6,6 +6,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     Header,
     HTTPException,
     UploadFile,
@@ -48,6 +49,7 @@ class CreateSessionRequest(BaseModel):
 
 class JobDescriptionRequest(BaseModel):
     text: str = Field(min_length=1)
+    title: str | None = None
 
 
 def api_error(code: str, message: str, http_status: int) -> HTTPException:
@@ -98,6 +100,8 @@ def save_job_description(
 ) -> dict[str, Any]:
     try:
         normalized = llm_client.extract_job(request.text)
+        if request.title:
+            normalized = normalized.model_copy(update={"title": request.title})
         repository.save_job_description(
             session_id, request.text, normalized.model_dump(mode="json")
         )
@@ -120,6 +124,7 @@ async def upload_job_description_file(
     repository: Annotated[MongoResumeRepository, Depends(get_repository)],
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
     queue: Annotated[AtlasTaskQueue, Depends(get_queue)],
+    title: Annotated[str | None, Form()] = None,
 ) -> dict[str, Any]:
     if repository.get_session(session_id) is None:
         raise api_error("SESSION_NOT_FOUND", "Screening session was not found", 404)
@@ -148,6 +153,8 @@ async def upload_job_description_file(
         raise api_error("NO_EXTRACTABLE_TEXT", "No text could be extracted from the file", 400)
     try:
         normalized = llm_client.extract_job(extraction.text)
+        if title:
+            normalized = normalized.model_copy(update={"title": title})
         repository.save_job_description(
             session_id, extraction.text, normalized.model_dump(mode="json")
         )

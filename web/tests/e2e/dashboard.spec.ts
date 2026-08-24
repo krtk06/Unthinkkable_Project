@@ -69,6 +69,22 @@ async function mockApi(page: Page, opts: { statusCallsBeforeScored?: number } = 
     if (route.request().method() === "POST" && path === "/v1/sessions") {
       return route.fulfill({ json: { session_id: "sess_e2e" } });
     }
+    if (route.request().method() === "POST" && path.endsWith("/job-description")) {
+      return route.fulfill({
+        status: 202,
+        json: {
+          session_id: "sess_e2e",
+          status: "accepted",
+          normalized_requirements: {
+            title: "Backend Engineer",
+            required: [{ name: "Python", type: "skill" }],
+            preferred: [{ name: "Kubernetes", type: "skill" }],
+            responsibilities: [],
+            ambiguities: [],
+          },
+        },
+      });
+    }
     if (route.request().method() === "POST" && path.endsWith("/job-description/file")) {
       return route.fulfill({
         status: 202,
@@ -134,13 +150,10 @@ test.describe("full screening flow", () => {
   test("upload JD and resume, wait for scoring, see candidate card, export", async ({ page }) => {
     await page.goto("/");
 
-    // Job description auto-uploads and normalizes
-    const jdInput = page.getByLabel(/drop a job description file or click to browse/i);
-    await jdInput.setInputFiles({
-      name: "jd.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.from("%PDF-1.4 fake"),
-    });
+    // Job description is filed via pasted text
+    await page.getByLabel(/role title/i).fill("Backend Engineer");
+    await page.getByLabel(/job description text/i).fill("Must know Python and REST APIs.");
+    await page.getByRole("button", { name: /file job description/i }).click();
     await expect(page.getByText(/required: python/i)).toBeVisible();
 
     // Resumes auto-upload once the session exists

@@ -63,6 +63,30 @@ async def test_create_session_and_upload_resume(client: httpx.AsyncClient) -> No
 
 
 @pytest.mark.anyio
+async def test_job_description_accepts_role_title_override(
+    client: httpx.AsyncClient,
+    repository: MongoResumeRepository,
+) -> None:
+    session_id = (await client.post("/v1/sessions", json={})).json()["session_id"]
+
+    response = await client.post(
+        f"/v1/sessions/{session_id}/job-description",
+        json={"text": "Must know Python", "title": "Machine Learning & Python Developer"},
+    )
+
+    assert response.status_code == 202
+    title = response.json()["normalized_requirements"]["title"]
+    assert title == "Machine Learning & Python Developer"
+
+    session = repository.get_session(session_id)
+    assert session is not None
+    assert (
+        session["job_description"]["normalized_json"]["title"]
+        == "Machine Learning & Python Developer"
+    )
+
+
+@pytest.mark.anyio
 async def test_upload_rejects_unsupported_file_and_missing_session(
     client: httpx.AsyncClient,
 ) -> None:
