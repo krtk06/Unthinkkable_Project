@@ -45,19 +45,25 @@ Useful direct calls:
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/sessions \
   -H 'content-type: application/json' \
+  -H 'authorization: Bearer <token>' \
   -d '{"job_description":"Backend engineer with Python APIs"}'
 
 curl -X POST http://127.0.0.1:8000/v1/sessions/<session_id>/resumes \
+  -H 'authorization: Bearer <token>' \
   -F 'files=@synthetic-resume.txt;type=text/plain'
 
-curl 'http://127.0.0.1:8000/v1/sessions/<session_id>/matches?min_score=7&limit=25'
+curl -X POST http://127.0.0.1:8000/v1/sessions/<session_id>/score \
+  -H 'authorization: Bearer <token>'
+
+curl 'http://127.0.0.1:8000/v1/sessions/<session_id>/matches?min_score=7&limit=25' \
+  -H 'authorization: Bearer <token>'
 ```
 
 Uploads are accepted asynchronously at the API boundary, persisted as Atlas jobs, and return batch/job/candidate IDs. Workers claim jobs with leases and retry failed work through the same Atlas cluster.
 
 ## Authentication
 
-The API and dashboard require a login. Set `AUTH_SECRET_KEY` in `.env` (a long random string). Users sign up at `http://localhost:3000/signup` with a username, email, and password. To provision an account directly, use:
+The API and dashboard require a login. Set `AUTH_SECRET_KEY` in `.env` (a long random string). Registration is open: users sign up at `http://localhost:3000/signup` with a username, email, and password. To provision an account directly, use:
 
 ```bash
 .venv/bin/python scripts/create_user.py --username recruiter --email recruiter@example.com
@@ -74,7 +80,13 @@ Original resume files use the local filesystem adapter in development. The persi
 
 ## Dashboard
 
-An optional Next.js review dashboard lives in `web/`. It covers session setup with automatic uploads — drop a job description and resumes and they are sent immediately, with no upload buttons. Processing status is polled, and candidates render as ranked cards showing name, highest education, skills, and a 0–10 match score with the evidence-based rubric gauge, plus JSON/CSV export. AI output is labeled as decision support throughout.
+An optional Next.js review dashboard lives in `web/`, styled after the demo's light beige + green theme. Sign in with email and password (open self-registration at `/signup`). The dashboard covers the full screening flow in three numbered sections:
+
+1. **Define the job** — role title, pasted job description text ("File job description"), or a JD file upload.
+2. **Add candidates** — drop resumes (PDF/TXT, multiple files), a live candidate counter, and a per-file parse status log.
+3. **Review the shortlist** — "Score all candidates" / "Re-score all candidates" buttons and ranked candidate cards showing a circular 0–10 score, SHORTLISTED badge, Skills/Experience/Education sub-scores, green (matching) vs. red (missing) skill tags, an analysis sentence with semantic similarity, plus Details modal (tabs for skills, experience with years detected, education, raw resume text) and Delete.
+
+The header shows an "API connected" status pill driven by a `/health` poll, and results can be exported as JSON/CSV. AI output is labeled as decision support throughout.
 
 Run it against a local API:
 
@@ -175,7 +187,7 @@ All prompts are versioned files under `prompts/` and referenced by `prompt_versi
 
 - `resume_extraction_v1.txt`: extract structured resume fields, no invention, warnings for missing data
 - `jd_extraction_v1.txt`: classify requirements as required/preferred, surface ambiguities
-- `match_scoring_v1.txt`: 0-10 rubric with Skills/Experience/Education sub-scores, matching vs. missing skills, and an analysis sentence
+- `match_scoring_v1.txt`: overall 0-10 score with Skills/Experience/Education sub-scores, matching vs. missing skills, an embedding-based semantic-similarity score, and a short analysis sentence; candidates scoring 7.0+ are flagged as shortlisted
 
 ## Final Verification
 

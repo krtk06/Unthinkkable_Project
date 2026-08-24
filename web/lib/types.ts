@@ -131,6 +131,7 @@ export interface CandidateDetail {
     storage_uri?: string | null;
     status?: string | null;
     error_code?: string | null;
+    extracted_text?: string | null;
     parsed_json?: ExtractedResume | null;
     created_at?: string | null;
     updated_at?: string | null;
@@ -158,7 +159,8 @@ export interface ParsedCandidate {
   matching_skills?: string[];
   missing_skills?: string[];
   semantic_similarity?: number;
-  analysis?: string;
+  analysis?: string | null;
   shortlisted?: boolean;
+  raw_text?: string | null;
   filename?: string | null;
 }

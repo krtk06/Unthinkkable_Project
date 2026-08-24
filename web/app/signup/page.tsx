@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { getToken, setToken } from "@/lib/auth";
+import { RainbowButton } from "@/components/ui/rainbow-button";
+import { GridPatternCard, GridPatternCardBody } from "@/components/ui/grid-pattern-card";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -46,7 +48,9 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen grid place-items-center p-6">
-      <form onSubmit={handleSubmit} className="glass p-8 w-full max-w-sm space-y-5">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm">
+        <GridPatternCard>
+          <GridPatternCardBody className="space-y-5">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-text">
             Create your account
@@ -112,9 +116,9 @@ export default function SignupPage() {
           </p>
         )}
 
-        <button type="submit" className="primaryButton w-full" disabled={busy}>
+        <RainbowButton type="submit" className="w-full" disabled={busy}>
           {busy ? "Creating account…" : "Create account"}
-        </button>
+        </RainbowButton>
 
         <p className="text-sm text-text-secondary text-center">
           Already have an account?{" "}
@@ -122,6 +126,8 @@ export default function SignupPage() {
             Sign in
           </Link>
         </p>
+          </GridPatternCardBody>
+        </GridPatternCard>
       </form>
     </div>
   );

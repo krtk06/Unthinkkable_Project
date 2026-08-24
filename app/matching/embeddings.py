@@ -2,6 +2,7 @@ import hashlib
 import math
 from typing import Protocol
 
+from app.config import get_settings
 from app.domain.job import JobRequirements
 from app.domain.resume import ExtractedResume
 
@@ -14,6 +15,27 @@ class EmbeddingClient(Protocol):
 class NullEmbeddingClient:
     def embed(self, text: str) -> list[float]:
         return []
+
+
+class OpenAIEmbeddingClient:
+    """OpenAI embeddings-backed client. Falls back to an empty vector on any
+    error so scoring degrades to the lexical similarity instead of failing."""
+
+    def __init__(self, api_key: str, model: str) -> None:
+        from openai import OpenAI
+
+        settings = get_settings()
+        self.client = OpenAI(api_key=api_key, timeout=settings.llm_timeout)
+        self.model = model
+
+    def embed(self, text: str) -> list[float]:
+        try:
+            response = self.client.embeddings.create(
+                model=self.model, input=text
+            )
+            return response.data[0].embedding
+        except Exception:
+            return []
 
 
 def embed_candidate(resume: ExtractedResume, client: EmbeddingClient) -> list[float]:

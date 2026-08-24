@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { NormalizedRequirements } from "@/lib/types";
+import { FileUpload } from "./ui/file-upload";
+import { GridPatternCard, GridPatternCardBody } from "./ui/grid-pattern-card";
+import { ShiningText } from "./ui/shining-text";
 
 interface JDFileUploaderProps {
   sessionId: string | null;
@@ -25,12 +28,8 @@ export default function JDFileUploader({
   onNormalized,
   onUploaded,
 }: JDFileUploaderProps) {
-  const [dragActive, setDragActive] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const inputId = useId();
 
   const upload = useCallback(
     async (selected: File) => {
@@ -59,109 +58,61 @@ export default function JDFileUploader({
     [sessionId, onSessionCreated, onNormalized, onUploaded]
   );
 
-  const handleFile = useCallback(
-    (incoming: File) => {
+  const handleFiles = useCallback(
+    (incoming: File[]) => {
+      const file = incoming[0];
+      if (!file) return;
       setError(null);
-      const ext = extensionOf(incoming.name);
+      const ext = extensionOf(file.name);
       if (!ACCEPTED_EXTENSIONS.includes(ext)) {
         setError(`Unsupported file type. Accepted: ${ACCEPTED_EXTENSIONS.join(", ")}`);
         return;
       }
-      if (incoming.size === 0) {
+      if (file.size === 0) {
         setError("File is empty.");
         return;
       }
-      if (incoming.size > MAX_FILE_BYTES) {
+      if (file.size > MAX_FILE_BYTES) {
         setError("File exceeds 10 MB limit.");
         return;
       }
-      setFile(incoming);
-      void upload(incoming);
+      void upload(file);
     },
     [upload]
   );
 
-  function handleDrop(event: React.DragEvent) {
-    event.preventDefault();
-    setDragActive(false);
-    const files = Array.from(event.dataTransfer.files);
-    if (files.length > 0) {
-      handleFile(files[0]);
-    }
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
   return (
-    <section className="glass p-5" aria-labelledby="jd-upload-title">
-      <h2 className="text-base font-semibold tracking-tight text-text mb-4" id="jd-upload-title">
-        Or upload a job description file
-      </h2>
-
-      <div
-        className={`border-2 border-dashed rounded-xl p-5 text-center transition-all duration-150 cursor-pointer ${
-          dragActive
-            ? "border-accent bg-accent/5 shadow-[0_0_20px_4px_rgba(52,211,153,0.1)]"
-            : "border-border bg-surface hover:border-border-hover"
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragActive(true);
-        }}
-        onDragLeave={() => setDragActive(false)}
-        onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
-        role="button"
-        tabIndex={0}
-      >
-        <label htmlFor={inputId} className="visuallyHidden">
-          Drop a job description file or click to browse
-        </label>
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="file"
-          accept=".pdf,.docx,.txt"
-          className="visuallyHidden"
-          onChange={(e) => {
-            const picked = e.target.files?.[0];
-            if (picked) handleFile(picked);
-            e.target.value = "";
-          }}
-        />
-        {file ? (
-          <div className="text-sm">
-            <p className="text-text truncate mb-1">{file.name}</p>
-            <p className="text-xs text-text-secondary">
-              {formatSize(file.size)} ·{" "}
-              {busy ? "Analyzing…" : "Analyzed — drop another file to replace it"}
-            </p>
+    <GridPatternCard className="flex flex-col min-h-[280px]">
+      <GridPatternCardBody className="flex flex-col flex-1 p-0">
+        <div className="flex items-start justify-between gap-2 p-5 pb-2">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight text-zinc-200" id="jd-upload-title">
+              Upload Files
+            </h2>
+            <p className="mt-0.5 text-xs text-zinc-500">Upload Job Description</p>
           </div>
-        ) : (
-          <div className="text-text-secondary text-sm">
-            <p className="mb-1">
-              Drop a job description here or <span className="text-accent underline">browse files</span>
-            </p>
-            <p className="text-xs text-text-secondary/60">PDF, DOCX, or TXT. Up to 10 MB.</p>
-          </div>
-        )}
-      </div>
+          <span className="rounded bg-zinc-900 px-1.5 py-0.5 font-data text-[10px] tracking-widest text-zinc-500 ring-1 ring-white/[0.06]">JD · FILE</span>
+        </div>
 
-      {error && (
-        <p className="text-error text-sm mt-2" role="alert">
-          {error}
-        </p>
-      )}
-    </section>
+        <div className="flex-1 px-3 pb-3">
+          <div className="rounded-xl border border-dashed border-white/10 bg-zinc-900/30">
+            <FileUpload onChange={handleFiles} accept=".pdf,.docx,.txt" />
+          </div>
+        </div>
+
+        <div className="px-5 pb-4">
+          {busy && (
+            <p className="mt-2 text-sm">
+              <ShiningText text="Analyzing…" className="text-sm font-medium" />
+            </p>
+          )}
+          {error && (
+            <p className="mt-2 text-error text-sm" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      </GridPatternCardBody>
+    </GridPatternCard>
   );
 }

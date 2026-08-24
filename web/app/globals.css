@@ -1,58 +1,163 @@
+@font-face {
+  font-family: "Thinger";
+  src: url("/fonts/Thinger-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Scoria";
+  src: url("/fonts/Scoria-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #121210;
-  --color-surface: rgba(30, 30, 28, 0.6);
-  --color-surface-hover: rgba(40, 40, 36, 0.7);
+  --color-bg: #0b0d10;
+  --color-surface: rgba(20, 22, 26, 0.7);
+  --color-surface-hover: rgba(30, 33, 38, 0.85);
   --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-hover: rgba(255, 255, 255, 0.12);
+  --color-border-hover: rgba(255, 255, 255, 0.14);
   --color-text: #e8e6e1;
   --color-text-secondary: #9a9890;
-  --color-accent: #34d399;
-  --color-accent-hover: #6ee7b7;
+  --color-accent: #5d5d65;
+  --color-accent-hover: #7a7a85;
   --color-error: #f87171;
   --color-warning: #fbbf24;
-  --color-success: #34d399;
+  --color-success: #5d5d65;
   --color-band-absent: #f87171;
   --color-band-limited: #fb923c;
   --color-band-partial: #fbbf24;
-  --color-band-strong: #34d399;
-  --color-band-exceptional: #10b981;
+  --color-band-strong: #5d5d65;
+  --color-band-exceptional: #5d5d65;
+  --color-1: hsl(0 100% 63%);
+  --color-2: hsl(270 100% 63%);
+  --color-3: hsl(210 100% 63%);
+  --color-4: hsl(195 100% 63%);
+  --color-5: hsl(90 100% 63%);
+  --color-primary-foreground: #e8e6e1;
+  --color-accent-foreground: #e8e6e1;
+  --color-input: rgba(255, 255, 255, 0.08);
+  --color-foreground: #e8e6e1;
   --radius-glass: 12px;
   --font-ui: var(--font-inter), system-ui, sans-serif;
   --font-data: var(--font-plex-mono), ui-monospace, monospace;
+  --animate-rainbow: rainbow var(--speed, 2s) infinite linear;
+}
+
+@keyframes rainbow {
+  0% {
+    background-position: 0%;
+  }
+  100% {
+    background-position: 200%;
+  }
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  scrollbar-gutter: stable;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: #06220f;
+}
+
+::-moz-selection {
+  background: var(--color-accent);
+  color: #06220f;
+}
+
+* {
+  scrollbar-width: thin;
+}
+
+.bg-grid-pattern {
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.14) 1px,
+    transparent 1px
+  );
+  background-size: 30px 30px;
+}
+
+.bg-grid-pattern-light {
+  background-image: radial-gradient(
+    circle,
+    rgba(28, 27, 24, 0.14) 1px,
+    transparent 1px
+  );
+  background-size: 30px 30px;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--color-bg);
+  background: #0b0d10;
   color: var(--color-text);
   font-family: var(--font-ui);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.65;
   min-height: 100vh;
-  background-image: radial-gradient(
-    rgba(255, 255, 255, 0.03) 1px,
-    transparent 1px
-  );
-  background-size: 24px 24px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-variant-ligatures: common-ligatures;
+  caret-color: var(--color-accent);
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid rgba(255, 255, 255, 0.2);
   outline-offset: 2px;
 }
 
 button:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--color-accent);
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.2);
   outline-offset: 2px;
+}
+
+a {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+input,
+textarea {
+  caret-color: var(--color-accent);
+}
+
+::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.6;
 }
 
 .visuallyHidden {
@@ -73,11 +178,20 @@ a:focus-visible {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-glass);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.25);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 
 .glass:hover {
   border-color: var(--color-border-hover);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 @keyframes fade-in {
@@ -91,13 +205,50 @@ a:focus-visible {
   }
 }
 
+@keyframes gradient-drift {
+  0% {
+    opacity: 0.4;
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translate3d(2%, 2%, 0) scale(1.15);
+  }
+  100% {
+    opacity: 0.4;
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+}
+
+.animate-gradient {
+  animation: gradient-drift 14s ease-in-out infinite;
+}
+
+.animate-gradient-delayed {
+  animation: gradient-drift 16s ease-in-out infinite;
+  animation-delay: -5s;
+}
+
+.animate-gradient-delayed-2 {
+  animation: gradient-drift 18s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient,
+  .animate-gradient-delayed,
+  .animate-gradient-delayed-2 {
+    animation: none;
+  }
+}
+
 @keyframes pulse-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+    box-shadow: 0 0 0 0 rgba(93, 93, 101, 0);
   }
   50% {
-    box-shadow: 0 0 20px 4px rgba(52, 211, 153, 0.15);
+    box-shadow: 0 0 20px 4px rgba(93, 93, 101, 0.18);
   }
 }
 
@@ -118,7 +269,7 @@ a:focus-visible {
 
 .primaryButton {
   background: var(--color-accent);
-  color: #121210;
+  color: #06220f;
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 8px 16px;
@@ -149,7 +300,7 @@ a:focus-visible {
 }
 
 .dangerButton:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.1);
+  background: rgba(248, 113, 113, 0.12);
 }
 
 .fieldError {
@@ -160,6 +311,49 @@ a:focus-visible {
 .hintText {
   font-size: 13px;
   color: var(--color-text-secondary);
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+h1 {
+  letter-spacing: -0.03em;
+}
+
+.font-data,
+.font-mono {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
+}
+
+.font-thinger {
+  font-family: "Thinger", sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.font-scoria {
+  font-family: "Scoria", serif;
+  letter-spacing: 0.02em;
+}
+
+.rainbow-border {
+  border: 0 !important;
+  background:
+    linear-gradient(#0e1116, #0e1116),
+    linear-gradient(#0e1116 50%, rgba(14, 17, 22, 0.6) 80%, rgba(14, 17, 22, 0)),
+    linear-gradient(90deg, var(--color-1), var(--color-5), var(--color-3), var(--color-4), var(--color-2));
+  background-size: 200%;
+  background-clip: padding-box, border-box, border-box;
+  background-origin: border-box;
+  border: calc(0.08rem) solid transparent !important;
+  animation: rainbow var(--speed, 2s) infinite linear;
 }
 
 button {

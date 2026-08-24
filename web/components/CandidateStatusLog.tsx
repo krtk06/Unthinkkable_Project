@@ -1,4 +1,5 @@
 import type { SessionStatus } from "@/lib/types";
+import { GridPatternCard, GridPatternCardBody } from "./ui/grid-pattern-card";
 
 interface CandidateStatusLogProps {
   status: SessionStatus | null;
@@ -41,19 +42,21 @@ export default function CandidateStatusLog({ status }: CandidateStatusLogProps) 
   const files = status.files;
 
   return (
-    <div className="space-y-2" aria-label="Candidate upload status">
-      <p className="text-sm font-medium text-text">
-        {total} candidate{total === 1 ? "" : "s"}
-      </p>
-      {files.length > 0 && (
-        <ul className="space-y-1 max-h-56 overflow-y-auto">
-          {files.map((file) => (
-            <li key={file.candidate_id} className="text-xs text-text-secondary">
-              {describe(file)}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <GridPatternCard>
+      <GridPatternCardBody className="space-y-2">
+        <p className="text-sm font-medium text-text">
+          {total} candidate{total === 1 ? "" : "s"}
+        </p>
+        {files.length > 0 && (
+          <ul className="space-y-1 max-h-56 overflow-y-auto">
+            {files.map((file) => (
+              <li key={file.candidate_id} className="text-xs text-text-secondary">
+                {describe(file)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </GridPatternCardBody>
+    </GridPatternCard>
   );
 }

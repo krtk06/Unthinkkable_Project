@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     llm_provider: str = "disabled"
     llm_model: str = ""
     llm_api_key: str | None = Field(default=None, repr=False)
+    embedding_provider: str = "disabled"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_api_key: str | None = Field(default=None, repr=False)
     clamav_host: str = "127.0.0.1"
     clamav_port: int = Field(default=3310, ge=1, le=65535)
     clamav_socket: str | None = None

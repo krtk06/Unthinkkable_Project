@@ -6,7 +6,7 @@ from app.domain.job import JobRequirements
 from app.domain.match import MatchBreakdown
 from app.domain.resume import ExtractedResume
 from app.ingestion.text_extract import ExtractionResult
-from app.workers.tasks import LocalTaskQueue, ResumeWorker, process_batch
+from app.workers.tasks import EmbeddingConfig, LocalTaskQueue, ModelConfig, ResumeWorker, process_batch
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
@@ -93,9 +93,12 @@ def make_worker() -> tuple[MongoResumeRepository, ResumeWorker, list[str]]:
         FakeStorage(),
         FakeExtractor(),
         FakeParser(),
-        provider="test",
-        model="test-model",
-        prompt_version="resume-extraction-v1",
+        model_config=ModelConfig(
+            provider="test",
+            model="test-model",
+            prompt_version="resume-extraction-v1",
+        ),
+        embedding_config=EmbeddingConfig(),
     )
     return repository, worker, [candidate["id"] for candidate in candidates]
 

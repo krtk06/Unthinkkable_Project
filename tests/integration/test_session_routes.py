@@ -186,6 +186,94 @@ async def test_matches_support_score_filters_and_cursor_pagination(
 
 
 @pytest.mark.anyio
+async def test_score_all_requires_job_description(
+    client: httpx.AsyncClient,
+    repository: MongoResumeRepository,
+) -> None:
+    session_id = (await client.post("/v1/sessions", json={})).json()["session_id"]
+
+    response = await client.post(f"/v1/sessions/{session_id}/score")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "NO_JOB_DESCRIPTION"
+
+
+@pytest.mark.anyio
+async def test_score_all_resets_matches_and_enqueues_parsed_candidates(
+    client: httpx.AsyncClient,
+    repository: MongoResumeRepository,
+) -> None:
+    session_id = (await client.post("/v1/sessions", json={})).json()["session_id"]
+    await client.post(
+        f"/v1/sessions/{session_id}/job-description",
+        json={"text": "Must know Python"},
+    )
+    candidate = repository.add_resume(
+        session_id,
+        filename="resume.txt",
+        content_type="text/plain",
+        size_bytes=4,
+        checksum="c" * 64,
+        storage_uri="local://c",
+    )
+    repository.save_extraction(
+        candidate["id"],
+        text="Python",
+        page_count=1,
+        ocr_used=False,
+        warnings=[],
+        parsed={"schema_version": "1.0", "skills": ["Python"]},
+        provenance={"provider": "test", "model": "test", "prompt_version": "v1"},
+    )
+
+    response = await client.post(f"/v1/sessions/{session_id}/score")
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "session_id": session_id,
+        "status": "accepted",
+        "queued": 1,
+    }
+    stored = repository.get_candidate(candidate["id"])
+    assert stored is not None
+    assert stored["resume"]["status"] == "parsed"
+    assert stored.get("match") is None
+
+
+@pytest.mark.anyio
+async def test_score_all_re_enqueues_parse_failed_candidates(
+    client: httpx.AsyncClient,
+    repository: MongoResumeRepository,
+) -> None:
+    session_id = (await client.post("/v1/sessions", json={})).json()["session_id"]
+    await client.post(
+        f"/v1/sessions/{session_id}/job-description",
+        json={"text": "Must know Python"},
+    )
+    candidate = repository.add_resume(
+        session_id,
+        filename="resume.txt",
+        content_type="text/plain",
+        size_bytes=4,
+        checksum="d" * 64,
+        storage_uri="local://d",
+    )
+    repository.update_stage(candidate["id"], "failed", "StructuredOutputError")
+
+    response = await client.post(f"/v1/sessions/{session_id}/score")
+
+    assert response.status_code == 202
+    assert response.json()["queued"] == 1
+
+
+@pytest.mark.anyio
+async def test_score_all_missing_session_returns_404(client: httpx.AsyncClient) -> None:
+    response = await client.post("/v1/sessions/missing/score")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "SESSION_NOT_FOUND"
+
+
+@pytest.mark.anyio
 async def test_unauthenticated_request_is_rejected(
     repository: MongoResumeRepository,
 ) -> None:

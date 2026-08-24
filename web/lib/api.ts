@@ -50,6 +50,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+export async function checkApiHealth(): Promise<boolean> {
+  try {
+    const response = await fetch(`${BASE_URL}/health`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export const api = {
   login(email: string, password: string): Promise<{ access_token: string; token_type: string; username: string }> {
     return request("/v1/auth/login", {
@@ -138,7 +147,15 @@ export const api = {
     return request(`/v1/sessions/${sessionId}/status`);
   },
 
+  scoreAllCandidates(sessionId: string): Promise<{ session_id: string; status: string; queued: number }> {
+    return request(`/v1/sessions/${sessionId}/score`, { method: "POST" });
+  },
+
   getCandidate(candidateId: string): Promise<CandidateDetail> {
     return request(`/v1/candidates/${candidateId}`);
+  },
+
+  deleteCandidate(candidateId: string): Promise<void> {
+    return request(`/v1/candidates/${candidateId}`, { method: "DELETE" });
   },
 };

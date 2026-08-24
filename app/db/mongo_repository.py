@@ -1,9 +1,20 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import uuid4
 
 from pymongo import ASCENDING
 from pymongo.database import Database
+
+
+@dataclass
+class ExtractionPayload:
+    text: str
+    page_count: int
+    ocr_used: bool
+    warnings: list[str]
+    parsed: dict[str, Any]
+    provenance: dict[str, str]
 
 
 def _id() -> str:
@@ -103,6 +114,12 @@ class MongoResumeRepository:
     def get_resume(self, resume_id: str) -> dict[str, Any] | None:
         return self.get_candidate(resume_id)
 
+    def remove_candidate(self, candidate_id: str) -> None:
+        self.sessions.update_one(
+            {"candidates.id": candidate_id},
+            {"$pull": {"candidates": {"id": candidate_id}}},
+        )
+
     def _update_candidate(self, candidate_id: str, update: dict[str, Any]) -> None:
         result = self.sessions.update_one(
             {"candidates.id": candidate_id},
@@ -166,23 +183,17 @@ class MongoResumeRepository:
     def save_extraction(
         self,
         candidate_id: str,
-        *,
-        text: str,
-        page_count: int,
-        ocr_used: bool,
-        warnings: list[str],
-        parsed: dict[str, Any],
-        provenance: dict[str, str],
+        payload: ExtractionPayload,
     ) -> None:
         self._update_candidate(
             candidate_id,
             {
-                "resume.extracted_text": text,
-                "resume.page_count": page_count,
-                "resume.ocr_used": ocr_used,
-                "resume.extraction_warnings": warnings,
-                "resume.parsed_json": parsed,
-                "resume.extraction": provenance,
+                "resume.extracted_text": payload.text,
+                "resume.page_count": payload.page_count,
+                "resume.ocr_used": payload.ocr_used,
+                "resume.extraction_warnings": payload.warnings,
+                "resume.parsed_json": payload.parsed,
+                "resume.extraction": payload.provenance,
                 "resume.status": "parsed",
             },
         )
@@ -210,7 +221,8 @@ class MongoResumeRepository:
     def reset_scoring_for_session(self, session_id: str) -> int:
         count = 0
         for candidate in self.list_candidates(session_id):
-            if candidate.get("resume", {}).get("parsed_json") is not None:
+            resume = candidate.get("resume")
+            if isinstance(resume, dict) and resume.get("parsed_json") is not None:
                 result = self.sessions.update_one(
                     {"_id": session_id, "candidates.id": candidate["id"]},
                     {

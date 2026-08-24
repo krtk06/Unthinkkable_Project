@@ -34,15 +34,17 @@ const CANDIDATE = {
           graduation_date: "2020-07",
         },
       ],
-      certifications: [],
-      languages: ["English"],
-      warnings: [],
+       certifications: [],
+       languages: ["English"],
+       warnings: [],
     },
+    extracted_text:
+      "Jane Doe\nSenior Backend Engineer at Acme (2021-03 – present)\nB.Sc. Computer Science, TU Berlin\nSkills: Python, REST",
   },
   match: {
     candidate_id: "cand_1",
-    score: 8,
-    skills_score: 8,
+    score: 7.2,
+    skills_score: 7.2,
     experience_score: 10,
     education_score: 4,
     matching_skills: ["Python", "REST"],
@@ -141,11 +143,15 @@ test.describe("full screening flow", () => {
     await page.addInitScript(() => {
       window.localStorage.setItem("srs_token", "test-token");
     });
+    await page.route("**/health", async (route) =>
+      route.fulfill({ json: { status: "ok" } })
+    );
     await mockApi(page);
   });
 
   test("upload JD and resume, wait for scoring, see candidate card, export", async ({ page }) => {
     await page.goto("/");
+    await expect(page.getByRole("heading", { name: /Hirelytics/i })).toBeVisible();
 
     // Job description is filed via pasted text
     await page.getByLabel(/role title/i).fill("Backend Engineer");
@@ -154,18 +160,29 @@ test.describe("full screening flow", () => {
     await expect(page.getByText(/required: python/i)).toBeVisible();
 
     // Resumes auto-upload once the session exists
-    const resumeInput = page.getByLabel(/drop resumes here or/i);
+    const resumeInput = page.getByLabel(/drop resumes here or click to browse/i);
     await resumeInput.setInputFiles({
       name: "jane.pdf",
       mimeType: "application/pdf",
       buffer: Buffer.from("%PDF-1.4 fake"),
     });
 
-    // Candidate card appears with name, education, skills, and score
-    await expect(page.getByText("Jane Doe")).toBeVisible();
-    await expect(page.getByText(/b\.sc\., computer science/i)).toBeVisible();
+    // Candidate card appears with name, skills, score, badge, and re-score button
+    await expect(page.getByRole("heading", { name: "Jane Doe" })).toBeVisible();
     await expect(page.getByText("Python", { exact: true })).toBeVisible();
-    await expect(page.getByText("8", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("img", { name: /match score 7\.2/i })).toBeVisible();
+    await expect(page.getByLabel("Shortlisted")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /re-score all candidates/i })
+    ).toBeVisible();
+
+    // Education lives in the details modal
+    await page.getByRole("button", { name: /view details/i }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Education" }).click();
+    await expect(dialog.getByText(/b\.sc\., computer science/i)).toBeVisible();
+    await page.keyboard.press("Escape");
 
     // Exports
     const [jsonDownload] = await Promise.all([

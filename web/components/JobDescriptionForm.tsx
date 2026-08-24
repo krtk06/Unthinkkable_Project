@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { motion } from "framer-motion";
 import { api, ApiError } from "@/lib/api";
 import type { NormalizedRequirements } from "@/lib/types";
+import { GridPatternCard, GridPatternCardBody } from "./ui/grid-pattern-card";
+import { RainbowButton } from "./ui/rainbow-button";
+import { ShiningText } from "./ui/shining-text";
 
 interface JobDescriptionFormProps {
   sessionId: string | null;
@@ -56,47 +60,57 @@ export default function JobDescriptionForm({
   }, [sessionId, title, text, onSessionCreated, onNormalized, onSubmitted]);
 
   return (
-    <section className="glass p-5 space-y-4" aria-labelledby="jd-form-title">
-      <h2 className="text-base font-semibold tracking-tight text-text" id="jd-form-title">
-        Job description
-      </h2>
+    <GridPatternCard className="flex flex-col min-h-[280px]">
+      <GridPatternCardBody className="flex flex-col flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-base font-semibold tracking-tight text-zinc-200" id="jd-form-title">
+            Job description
+          </h2>
+          <span className="rounded bg-zinc-900 px-1.5 py-0.5 font-data text-[10px] tracking-widest text-zinc-500 ring-1 ring-white/[0.06]">JD · TEXT</span>
+        </div>
 
-      <label className="block space-y-1">
-        <span className="text-sm text-text-secondary">Role title</span>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Backend Software Engineer"
-          className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-text placeholder:text-text-secondary/60 focus:border-accent"
-        />
-      </label>
+        <label className="mt-4 block space-y-1">
+          <span className="text-sm text-zinc-400">Role title</span>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Senior Backend Software Engineer"
+            className="w-full rounded-lg bg-zinc-900 border border-white/5 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-colors"
+          />
+        </label>
 
-      <label className="block space-y-1">
-        <span className="text-sm text-text-secondary">Job description text</span>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Paste the full job description here..."
-          rows={8}
-          className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-text placeholder:text-text-secondary/60 focus:border-accent resize-y"
-        />
-      </label>
+        <label className="mt-3 block flex-1 space-y-1">
+          <span className="text-sm text-zinc-400">Job description text</span>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Paste the full job description here..."
+            rows={8}
+            className="h-full min-h-40 w-full rounded-lg bg-zinc-900 border border-white/5 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none resize-y transition-colors"
+          />
+        </label>
 
-      {error && (
-        <p className="text-error text-sm" role="alert">
-          {error}
-        </p>
-      )}
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-2 text-error text-sm"
+            role="alert"
+          >
+            {error}
+          </motion.p>
+        )}
 
-      <button
-        type="button"
-        className="primaryButton w-full"
-        onClick={() => void submit()}
-        disabled={busy}
-      >
-        {busy ? "Filing job description…" : "File job description"}
-      </button>
-    </section>
+        <RainbowButton
+          type="button"
+          className="mt-5 w-full"
+          onClick={() => void submit()}
+          disabled={busy}
+        >
+          {busy ? <ShiningText text="Filing job description…" className="text-sm" /> : "File job description"}
+        </RainbowButton>
+      </GridPatternCardBody>
+    </GridPatternCard>
   );
 }

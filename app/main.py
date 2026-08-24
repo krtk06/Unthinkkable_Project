@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.auth import router as auth_router
+from app.api.candidate_routes import router as candidate_router
 from app.api.routes import router as api_router
 from app.domain.resume import ExtractedResume
 from app.llm.client import LLMError
@@ -21,6 +22,7 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(api_router)
+app.include_router(candidate_router)
 
 
 @app.exception_handler(HTTPException)

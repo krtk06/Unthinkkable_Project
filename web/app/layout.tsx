@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Inter } from "next/font/google";
 import "./globals.css";
+import { AnimatedBackground } from "@/components/ui/AnimatedBackground";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -14,7 +15,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Resume Screener",
+  title: "Hirelytics",
   description:
     "Evidence-based resume screening. AI scores are decision support; a human makes the hiring decision.",
 };
@@ -22,7 +23,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${plexMono.variable}`}>{children}</body>
+      <body className={`${inter.variable} ${plexMono.variable}`}>
+        <AnimatedBackground />
+        {children}
+      </body>
     </html>
   );
 }

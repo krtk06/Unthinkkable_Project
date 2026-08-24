@@ -9,28 +9,28 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: "#121210",
-        surface: "rgba(30, 30, 28, 0.6)",
-        "surface-hover": "rgba(40, 40, 36, 0.7)",
+        bg: "#0b0d10",
+        surface: "rgba(20, 22, 26, 0.7)",
+        "surface-hover": "rgba(30, 33, 38, 0.85)",
         border: "rgba(255, 255, 255, 0.08)",
-        "border-hover": "rgba(255, 255, 255, 0.12)",
+        "border-hover": "rgba(255, 255, 255, 0.14)",
         text: {
           DEFAULT: "#e8e6e1",
           secondary: "#9a9890",
         },
         accent: {
-          DEFAULT: "#34d399",
-          hover: "#6ee7b7",
+          DEFAULT: "#5d5d65",
+          hover: "#7a7a85",
         },
         error: "#f87171",
         warning: "#fbbf24",
-        success: "#34d399",
+        success: "#5d5d65",
         band: {
           absent: "#f87171",
           limited: "#fb923c",
           partial: "#fbbf24",
-          strong: "#34d399",
-          exceptional: "#10b981",
+          strong: "#5d5d65",
+          exceptional: "#5d5d65",
         },
       },
       borderRadius: {

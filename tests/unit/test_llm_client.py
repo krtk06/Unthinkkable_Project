@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import pytest
 
@@ -7,7 +8,7 @@ from app.llm.client import StructuredLLMClient
 from app.llm.validation import StructuredOutputError
 
 
-def valid_resume_payload() -> dict[str, object]:
+def valid_resume_payload() -> dict[str, Any]:
     return {
         "schema_version": "1.0",
         "candidate": {
@@ -62,4 +63,47 @@ def test_client_fails_after_repair_is_invalid() -> None:
 
     with pytest.raises(StructuredOutputError, match="INVALID_JSON"):
         client.extract_resume("Ada\nPython")
+
+
+def test_parse_tolerates_markdown_fences() -> None:
+    from app.llm.validation import parse_structured_output
+
+    fenced = f"```json\n{json.dumps(valid_resume_payload())}\n```"
+    result = parse_structured_output(fenced, ExtractedResume)
+    assert result.candidate.name == "Ada"
+
+
+def test_parse_extracts_json_from_surrounding_prose() -> None:
+    from app.llm.validation import parse_structured_output
+
+    prose = f"Here is the result:\n{json.dumps(valid_resume_payload())}\nHope this helps!"
+    result = parse_structured_output(prose, ExtractedResume)
+    assert result.skills == ["Python"]
+
+
+def test_parse_drops_unknown_extra_keys() -> None:
+    from app.llm.validation import parse_structured_output
+
+    payload = {**valid_resume_payload(), "confidence": 0.9, "notes": "extra"}
+    payload["candidate"] = {**payload["candidate"], "nickname": "Ada"}
+    result = parse_structured_output(json.dumps(payload), ExtractedResume)
+    assert result.candidate.name == "Ada"
+    assert result.skills == ["Python"]
+
+
+def test_parse_coerces_null_list_fields_to_defaults() -> None:
+    from app.llm.validation import parse_structured_output
+
+    payload = valid_resume_payload()
+    payload["languages"] = None
+    result = parse_structured_output(json.dumps(payload), ExtractedResume)
+    assert result.languages == []
+    assert result.skills == ["Python"]
+
+
+def test_parse_still_fails_on_missing_required_fields() -> None:
+    from app.llm.validation import parse_structured_output
+
+    with pytest.raises(StructuredOutputError, match="SCHEMA_VALIDATION_FAILED"):
+        parse_structured_output(json.dumps({"schema_version": "1.0"}), ExtractedResume)
 

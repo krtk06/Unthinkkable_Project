@@ -1,5 +1,6 @@
 from collections import deque
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from threading import Lock
 from typing import Protocol, cast
 
@@ -35,6 +36,20 @@ class ResumeParser(Protocol):
     def extract_resume(self, text: str) -> ExtractedResume: ...
 
 
+@dataclass
+class ModelConfig:
+    provider: str
+    model: str
+    prompt_version: str
+
+
+@dataclass
+class EmbeddingConfig:
+    client: EmbeddingClient | None = None
+    model: str = ""
+    threshold: float = 7.0
+
+
 class ResumeWorker:
     def __init__(
         self,
@@ -43,23 +58,20 @@ class ResumeWorker:
         extractor: TextExtractor,
         parser: ResumeParser,
         *,
-        provider: str,
-        model: str,
-        prompt_version: str,
-        embedding_client: EmbeddingClient | None = None,
-        embedding_model: str = "",
-        shortlist_threshold: float = 7.0,
+        model_config: ModelConfig,
+        embedding_config: EmbeddingConfig | None = None,
     ) -> None:
         self.repository = repository
         self.storage = storage
         self.extractor = extractor
         self.parser = parser
-        self.provider = provider
-        self.model = model
-        self.prompt_version = prompt_version
-        self.embedding_client = embedding_client
-        self.embedding_model = embedding_model
-        self.shortlist_threshold = shortlist_threshold
+        self.provider = model_config.provider
+        self.model = model_config.model
+        self.prompt_version = model_config.prompt_version
+        _emb = embedding_config or EmbeddingConfig()
+        self.embedding_client = _emb.client
+        self.embedding_model = _emb.model
+        self.shortlist_threshold = _emb.threshold
 
     def process_resume(self, candidate_id: str) -> str:
         candidate = self.repository.get_candidate(candidate_id)
@@ -81,18 +93,22 @@ class ResumeWorker:
             )
             self.repository.update_stage(candidate_id, "text_extracted")
             parsed = self.parser.extract_resume(extraction.text)
+            from app.db.mongo_repository import ExtractionPayload
+
             self.repository.save_extraction(
                 candidate_id,
-                text=extraction.text,
-                page_count=extraction.page_count,
-                ocr_used=extraction.ocr_used,
-                warnings=extraction.warnings,
-                parsed=parsed.model_dump(mode="json"),
-                provenance={
-                    "provider": self.provider,
-                    "model": self.model,
-                    "prompt_version": self.prompt_version,
-                },
+                ExtractionPayload(
+                    text=extraction.text,
+                    page_count=extraction.page_count,
+                    ocr_used=extraction.ocr_used,
+                    warnings=extraction.warnings,
+                    parsed=parsed.model_dump(mode="json"),
+                    provenance={
+                        "provider": self.provider,
+                        "model": self.model,
+                        "prompt_version": self.prompt_version,
+                    },
+                ),
             )
             if self.embedding_client is not None:
                 self.repository.save_embedding(

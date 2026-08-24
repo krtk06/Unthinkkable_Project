@@ -1,56 +1,78 @@
-.band-absent {
-  color: var(--color-band-absent);
-}
-
-.band-limited {
-  color: var(--color-band-limited);
-}
-
-.band-partial {
-  color: var(--color-band-partial);
-}
-
-.band-strong {
-  color: var(--color-band-strong);
-}
-
-.band-exceptional {
-  color: var(--color-band-exceptional);
-}
-
-.gauge {
-  display: inline-flex;
-  gap: 2px;
-  vertical-align: middle;
-}
-
 .wrap {
-  display: inline-flex;
+  display: inline-inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   white-space: nowrap;
 }
 
-.gaugeSegment {
-  width: 7px;
-  height: 16px;
-  border-radius: 2px;
-  background: var(--color-border);
+.gauge {
+  width: 80px;
+  height: 80px;
+  display: block;
 }
 
-.gaugeLarge .gaugeSegment {
-  width: 14px;
-  height: 26px;
+.track {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+
+.progress {
+  fill: none;
+  stroke: var(--color-band-strong);
+  stroke-width: 9;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease-out, stroke 0.2s;
 }
 
 .scoreValue {
   font-family: var(--font-data);
+  font-weight: 600;
+  font-size: 1rem;
+  fill: var(--color-text);
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
+.fraction {
+  font-size: 0.6rem;
   font-weight: 500;
-  color: var(--color-text);
+  fill: var(--color-text-secondary);
+}
+
+.matchLabel {
+  font-family: var(--font-ui);
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  fill: var(--color-text-secondary);
+  dominant-baseline: middle;
+  text-anchor: middle;
 }
 
 .bandLabel {
-  font-size: 12px;
+  font-size: 0.625rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.bandAbsent {
+  color: var(--color-band-absent);
+}
+
+.bandLimited {
+  color: var(--color-band-limited);
+}
+
+.bandPartial {
+  color: var(--color-band-partial);
+}
+
+.bandStrong {
+  color: var(--color-band-strong);
+}
+
+.bandExceptional {
+  color: var(--color-band-exceptional);
 }
