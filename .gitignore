@@ -11,6 +11,7 @@ build/
 *.egg-info/
 coverage.xml
 htmlcov/
-DemoVideo/
+DemoVideo/*
 *.mp4
 *.mov
+!DemoVideo/Hirelytics_demo.mp4
