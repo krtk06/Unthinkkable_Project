@@ -17,7 +17,7 @@ router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=1)
+    email: EmailStr
     password: str = Field(min_length=1)
 
 
@@ -39,20 +39,20 @@ def login(
     repository: Annotated[UserRepository, Depends(get_user_repository)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> LoginResponse:
-    user = repository.get_by_username(request.username)
+    user = repository.get_by_email(request.email.lower())
     if user is None or not verify_password(request.password, user["password_hash"]):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             {
                 "error": {
                     "code": "INVALID_CREDENTIALS",
-                    "message": "Incorrect username or password",
+                    "message": "Incorrect email or password",
                     "details": {},
                 }
             },
         )
-    token = create_access_token(request.username, settings)
-    return LoginResponse(access_token=token, username=request.username)
+    token = create_access_token(user["username"], settings)
+    return LoginResponse(access_token=token, username=user["username"])
 
 
 @router.post("/signup", response_model=LoginResponse, status_code=status.HTTP_201_CREATED)

@@ -8,7 +8,7 @@ import { getToken, setToken } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.login(username, password);
+      const result = await api.login(email, password);
       setToken(result.access_token);
       router.replace("/");
     } catch (err) {
@@ -49,12 +49,12 @@ export default function LoginPage() {
         </div>
 
         <label className="block space-y-1">
-          <span className="text-sm text-text-secondary">Username</span>
+          <span className="text-sm text-text-secondary">Email</span>
           <input
-            type="text"
-            autoComplete="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="w-full rounded-lg bg-surface border border-border px-3 py-2 text-text focus:border-accent"
             required
           />

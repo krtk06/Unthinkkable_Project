@@ -51,11 +51,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  login(username: string, password: string): Promise<{ access_token: string; token_type: string; username: string }> {
+  login(email: string, password: string): Promise<{ access_token: string; token_type: string; username: string }> {
     return request("/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ email, password }),
     });
   },
 

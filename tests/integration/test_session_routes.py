@@ -156,12 +156,20 @@ async def test_login_returns_token_and_me_resolves_user(
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as value:
         bad = await value.post(
-            "/v1/auth/login", json={"username": "recruiter", "password": "wrong"}
+            "/v1/auth/login",
+            json={"email": "recruiter@example.com", "password": "wrong"},
         )
         assert bad.status_code == 401
 
+        unknown = await value.post(
+            "/v1/auth/login",
+            json={"email": "nobody@example.com", "password": "password123"},
+        )
+        assert unknown.status_code == 401
+
         login = await value.post(
-            "/v1/auth/login", json={"username": "recruiter", "password": "password123"}
+            "/v1/auth/login",
+            json={"email": "recruiter@example.com", "password": "password123"},
         )
         assert login.status_code == 200
         token = login.json()["access_token"]

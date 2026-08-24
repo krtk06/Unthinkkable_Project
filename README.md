@@ -63,11 +63,11 @@ The API and dashboard require a login. Set `AUTH_SECRET_KEY` in `.env` (a long r
 .venv/bin/python scripts/create_user.py --username recruiter --email recruiter@example.com
 ```
 
-Sign in with `POST /v1/auth/login` (`{username, password}`) to receive a bearer token; all `/v1/sessions/*` and `/v1/candidates/*` endpoints require it via `Authorization: Bearer <token>`. The dashboard redirects to `/login` until a valid token is stored.
+Sign in with `POST /v1/auth/login` (`{email, password}`) to receive a bearer token; all `/v1/sessions/*` and `/v1/candidates/*` endpoints require it via `Authorization: Bearer <token>`. The dashboard redirects to `/login` until a valid token is stored.
 
 ```bash
 # Demo against a running API (after creating a user):
-.venv/bin/python scripts/demo_api.py --username recruiter --password <password>
+.venv/bin/python scripts/demo_api.py --email recruiter@example.com --password <password>
 ```
 
 Original resume files use the local filesystem adapter in development. The persistence layer stores session documents with embedded job descriptions, candidates, processing attempts, extraction provenance, embeddings, and match results. OpenAI calls use JSON mode with versioned prompts under `prompts/`; ClamAV scanning fails closed when the service is unavailable or rejects a stream.
